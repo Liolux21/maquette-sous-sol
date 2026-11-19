@@ -163,10 +163,10 @@ const MODEL = {
   hauteur: 240,          // hauteur sous plafond (12 rangs de parpaings de 20 cm)
   dalle: 20,             // épaisseur du plafond
   rooms: [
-    { id:'garage', nom:'Garage', surface:'24 m²', x0:0,   x1:309, z0:0, z1:772, etiquette:[154,300] },
+    { id:'garage', nom:'Garage', surface:'24 m²', x0:0,   x1:309, z0:0, z1:772, etiquette:[154,250] },
     { id:'local',  nom:'Local technique', surface:'4,6 m²', x0:0, x1:309, z0:782, z1:932, etiquette:[230,850] },
     { id:'cave2',  nom:'Cave 2', surface:'28 m²', x0:329, x1:657, z0:0, z1:932, etiquette:[493,560] },
-    { id:'cave1',  nom:'Cave 1', surface:'27 m² après doublage', x0:677, x1:989, z0:0, z1:932, etiquette:[833,640] },
+    { id:'cave1',  nom:'Cave 1', surface:'27 m² après doublage', x0:677, x1:989, z0:0, z1:932, etiquette:[833,466] },
   ],
   // Murs : rectangles au sol. Ouvertures repérées le long du mur (from/to), h = hauteur de passage.
   // porte : 'baie' (baie vitrée coulissante), 'porte' (porte pleine), 'panneau' (contreplaqué), absent = passage libre
@@ -209,7 +209,7 @@ const MODEL = {
   },
   // Peinture blanche des murs de la cave 1 : plaques du doublage + mur côté cave 2 (parpaings peints)
   peintureCave1: true,
-  surprise: true,                                     // bonhomme en caleçon à cœurs dans la cave 1
+  surprise: true,                                     // bonhomme en caleçon à cœurs au milieu du garage
   // Faux plafond suspendu cave 1 : ossature T24, dalles 60×60, calepinage centré, entre les faces du doublage
   fauxPlafond: { hauteur:220, x0:677, x1:975.75, z0:13.25, z1:918.75, module:60,
                  panneauxLED: [[796.4,256],[796.4,496],[796.4,736]] },
@@ -576,24 +576,25 @@ function rangementCave2(g){
   }
 }
 
-// Surprise : bonhomme en blocs en caleçon à cœurs, avec une pancarte, dans la cave 1 (tourné vers le fond)
+// Surprise : bonhomme en blocs en caleçon à cœurs, avec une pancarte, au milieu du garage (tourné vers la cave / l'arrière du garage)
 function bonhomme(g){
-  const x=833, z=300;
+  const x=207, z=390, f=1;                             // f = 1 : visage côté +z
+  const F = (d) => z + f*d;                            // profondeur depuis le centre vers l'avant
   g.box(x-17,x-2,0,62,z-8,z+8,'peau'); g.box(x+2,x+17,0,62,z-8,z+8,'peau');          // jambes
   g.box(x-21,x+21,62,95,z-10,z+10,'calecon');                                        // caleçon à cœurs
   g.box(x-21,x+21,95,140,z-9,z+9,'peau');                                            // torse
   g.box(x-6,x+6,140,146,z-6,z+6,'peau');                                             // cou
   g.box(x-16,x+16,146,178,z-16,z+16,'peau');                                         // tête
-  g.box(x-17,x+17,176,184,z-17,z+17,'cheveux'); g.box(x-17,x+17,160,184,z+12,z+17,'cheveux');
-  for (const ex of [-9,5]) g.box(x+ex,x+ex+4,165,170,z-16.6,z-16,'sombre');            // yeux
-  g.box(x-7,x+7,153,155.5,z-16.6,z-16,'sombre');                                     // sourire
-  g.box(x-9,x-6,155,158,z-16.6,z-16,'sombre'); g.box(x+6,x+9,155,158,z-16.6,z-16,'sombre');
-  for (const ex of [-14,10]) g.box(x+ex,x+ex+4,156,160,z-16.5,z-16,'joues');         // joues
-  g.box(x-31,x-21,85,140,z-5,z+5,'peau');                                             // bras gauche le long du corps
-  g.box(x+21,x+87,128,140,z-5,z+5,'peau');                                            // bras droit tendu
-  g.box(x+83,x+91,70,165,z-3,z+3,'bois');                                             // manche de la pancarte
-  g.box(880,960,160,200,z-2,z+1,'blanc');                                       // pancarte
-  g.box(880,960,160,200,z-2.4,z-2.1,'pancarte');   // texte calé sur la pancarte (80 × 40 cm)
+  g.box(x-17,x+17,176,184,z-17,z+17,'cheveux'); g.box(x-17,x+17,160,184,z-17,z-12,'cheveux');
+  for (const ex of [-9,5]) g.box(x+ex,x+ex+4,165,170,F(16),F(16.6),'sombre');        // yeux
+  g.box(x-7,x+7,153,155.5,F(16),F(16.6),'sombre');                                   // sourire
+  g.box(x-9,x-6,155,158,F(16),F(16.6),'sombre'); g.box(x+6,x+9,155,158,F(16),F(16.6),'sombre');
+  for (const ex of [-14,10]) g.box(x+ex,x+ex+4,156,160,F(16),F(16.5),'joues');       // joues
+  g.box(x+21,x+31,85,140,z-5,z+5,'peau');                                             // bras le long du corps
+  g.box(x-87,x-21,128,140,z-5,z+5,'peau');                                            // bras tendu
+  g.box(x-91,x-83,70,165,z-3,z+3,'bois');                                             // manche de la pancarte
+  g.box(80,160,160,200,z-1,z+2,'blanc');                                              // pancarte (80 × 40 cm)
+  g.box(80,160,160,200,F(2.1),F(2.4),'pancarte');
 }
 
 // PAC (unité intérieure murale) + ballon Viessmann Vitocell 100-V 300 L dans le coin du garage
@@ -830,7 +831,7 @@ function texCalecon(){
 function texPancarte(){
   const c=cv(512,256), x=c.getContext('2d');
   x.fillStyle='#ffffff'; x.fillRect(0,0,512,256);
-  x.translate(512,256); x.rotate(Math.PI);             // vue depuis le fond de la cave : texte retourné
+  x.translate(0,256); x.scale(1,-1);                   // la texture s'affiche à l'envers sur les faces : on compense
   x.fillStyle='#d42a3a'; x.textAlign='center'; x.textBaseline='middle';
   x.font='bold 112px "Comic Sans MS","Chalkboard SE","Segoe Print",sans-serif';
   x.fillText("Je t'aime",256,118);
