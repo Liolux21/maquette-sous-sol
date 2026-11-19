@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sous-sol en 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Mise en page : la maquette occupe tout l'écran, un panneau d'outils flotte en haut à gauche */
+  --paper:#e6e7e2;
+  --panel:rgba(249,249,246,.94);
+  --ink:#1c2023;
+  --muted:#5b6166;
+  --line:#c8cac3;
+  --accent:#c95a24;
+  --font-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:14px;overflow:hidden;-webkit-font-smoothing:antialiased}
+#stage{position:fixed;inset:0}
+#gl,#ov{position:absolute;inset:0;width:100%;height:100%;display:block}
+#gl{touch-action:none;cursor:grab}
+#gl.dragging{cursor:grabbing}
+#gl.measuring{cursor:crosshair}
+#ov{pointer-events:none}
+
+.panel{position:absolute;top:16px;left:16px;width:288px;max-height:calc(100% - 32px);overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:14px;
+  box-shadow:0 1px 2px rgba(0,0,0,.05),0 8px 24px rgba(30,35,40,.08)}
+.panel h1{font-family:var(--font-display);font-weight:600;font-size:22px;letter-spacing:.01em;margin:0;line-height:1.1;text-wrap:balance}
+.panel .sub{margin:4px 0 0;color:var(--muted);font-size:13px}
+.label{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.seg button{appearance:none;border:0;background:transparent;font:500 13px var(--font-body);padding:8px 4px;color:var(--ink);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg2{grid-template-columns:1fr 1fr}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{appearance:none;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;font:500 12.5px var(--font-body);color:var(--ink);cursor:pointer}
+.chips button:hover{border-color:var(--ink)}
+.toggles{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+.toggles label{display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;user-select:none}
+.toggles input{accent-color:var(--accent);width:15px;height:15px;margin:0}
+.tool{appearance:none;border:1px solid var(--accent);background:#fff;color:var(--accent);border-radius:8px;padding:7px 10px;font:600 13px var(--font-body);cursor:pointer;width:100%}
+.tool[aria-pressed="true"]{background:var(--accent);color:#fff}
+.note{margin:0;font-size:12px;color:var(--muted);line-height:1.45;border-top:1px solid var(--line);padding-top:12px}
+.note b{color:var(--ink);font-weight:600}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.hint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:rgba(28,32,35,.82);color:#f3f3f0;
+  font-size:12.5px;padding:7px 12px;border-radius:999px;white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis}
+.pad{position:absolute;right:20px;bottom:20px;display:none;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,48px);gap:6px}
+.pad.on{display:grid}
+.pad button{appearance:none;border:1px solid var(--line);background:var(--panel);border-radius:10px;font:600 18px var(--font-body);color:var(--ink);cursor:pointer;touch-action:none;user-select:none}
+.pad button:active{background:var(--ink);color:#fff}
+.pad .up{grid-column:2;grid-row:1}.pad .left{grid-column:1;grid-row:2}.pad .down{grid-column:2;grid-row:2}.pad .right{grid-column:3;grid-row:2}
+.rooms-vis{display:none}
+.legend ul{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.legend li{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.legend span{width:18px;height:7px;border-radius:2px;flex:none}
+.legend[hidden]{display:none}
+
+@media (max-width:640px){
+  .panel{top:10px;left:10px;right:10px;width:auto;padding:12px;gap:10px;max-height:46%}
+  .panel h1{font-size:19px}
+  .hint{bottom:10px;font-size:11.5px}
+  .pad{right:12px;bottom:46px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl" aria-label="Maquette 3D du sous-sol"></canvas>
+  <canvas id="ov" aria-hidden="true"></canvas>
+
+  <div class="panel" id="panel">
+    <div>
+      <h1>Sous-sol · maquette 3D</h1>
+      <p class="sub">Garage, cave 2 et cave 1, environ 86 m²</p>
+    </div>
+
+    <div>
+      <p class="label">Vue</p>
+      <div class="seg" id="modes">
+        <button type="button" id="m-orbit" data-mode="orbit" aria-pressed="true">3D</button>
+        <button type="button" id="m-plan" data-mode="plan" aria-pressed="false">Plan</button>
+        <button type="button" id="m-visite" data-mode="visite" aria-pressed="false">Visite</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="label" id="rooms-label">Cadrer sur</p>
+      <div class="chips" id="rooms">
+        <button type="button" data-room="all">Tout</button>
+        <button type="button" data-room="garage">Garage</button>
+        <button type="button" data-room="cave2">Cave 2</button>
+        <button type="button" data-room="cave1">Cave 1</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="label">Coin du garage</p>
+      <div class="seg seg2" id="chauff">
+        <button type="button" data-v="cuve" aria-pressed="false">Cuve à mazout</button>
+        <button type="button" data-v="pac" aria-pressed="true">PAC + ballon</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="label">Afficher</p>
+      <div class="toggles">
+        <label><input type="checkbox" id="t-plafond"> Plafond</label>
+        <label><input type="checkbox" id="t-murs"> Murs à 1 m</label>
+        <label><input type="checkbox" id="t-cotes" checked> Cotes</label>
+        <label><input type="checkbox" id="t-etiq" checked> Étiquettes</label>
+        <label><input type="checkbox" id="t-plaques" checked> Plaques hydro</label>
+        <label><input type="checkbox" id="t-vmc" checked> VMC</label>
+        <label><input type="checkbox" id="t-fp" checked> Faux plafond</label>
+      </div>
+    </div>
+
+    <div class="legend" id="legend">
+      <p class="label">VMC double flux · gaines plates</p>
+      <ul>
+        <li><span style="background:#4d9e5c"></span>Prise d'air neuf (extérieur → caisson)</li>
+        <li><span style="background:#4080d9"></span>Insufflation (caisson → pièces)</li>
+        <li><span style="background:#edb333"></span>Extraction (évier → caisson)</li>
+        <li><span style="background:#8c5c3d"></span>Rejet d'air vicié (caisson → extérieur)</li>
+      </ul>
+    </div>
+
+    <button type="button" class="tool" id="measure" aria-pressed="false" hidden>Mesurer une distance</button>
+
+    <p class="note">Cotes reprises du plan. <b>Hauteur sous plafond : 2,40 m</b> (12 rangs de parpaings). Les portes et les ouvertures sont placées d'après le plan et les photos.<br><br><b>Doublage cave 1</b> (du mur vers la pièce) : lame d'air 2 cm, ossature métal 10 cm avec PIR/PUR 6 cm, plaque hydro 12,5 mm. Murs peints en blanc. Décochez « Plaques hydro » pour voir l'ossature.<br><br><b>Faux plafond cave 1</b> : ossature T24, dalles 60×60, sous-face à 2,20 m (plénum de 20 cm pour la gaine de VMC).</p>
+  </div>
+
+  <div class="hint" id="hint"></div>
+
+  <div class="pad" id="pad" aria-label="Se déplacer">
+    <button type="button" class="up" data-k="f" aria-label="Avancer">↑</button>
+    <button type="button" class="left" data-k="l" aria-label="Tourner à gauche">←</button>
+    <button type="button" class="down" data-k="b" aria-label="Reculer">↓</button>
+    <button type="button" class="right" data-k="r" aria-label="Tourner à droite">→</button>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   MODÈLE — toutes les mesures en centimètres.
+   Repère : x vers la droite du plan (de la façade du garage vers la cave 1),
+            z vers le bas du plan, y vers le haut. Origine : angle intérieur
+            haut-gauche du garage, au niveau du sol.
+   ===================================================================== */
+const MODEL = {
+  hauteur: 240,          // hauteur sous plafond (12 rangs de parpaings de 20 cm)
+  dalle: 20,             // épaisseur du plafond
+  rooms: [
+    { id:'garage', nom:'Garage', surface:'24 m²', x0:0,   x1:309, z0:0, z1:772, etiquette:[154,300] },
+    { id:'local',  nom:'Local technique', surface:'4,6 m²', x0:0, x1:309, z0:782, z1:932, etiquette:[230,850] },
+    { id:'cave2',  nom:'Cave 2', surface:'28 m²', x0:329, x1:657, z0:0, z1:932, etiquette:[493,560] },
+    { id:'cave1',  nom:'Cave 1', surface:'27 m² après doublage', x0:677, x1:989, z0:0, z1:932, etiquette:[833,466] },
+  ],
+  // Murs : rectangles au sol. Ouvertures repérées le long du mur (from/to), h = hauteur de passage.
+  // porte : 'baie' (baie vitrée coulissante), 'porte' (porte pleine), 'panneau' (contreplaqué), absent = passage libre
+  walls: [
+    { id:'nord',   x0:-20, x1:1009, z0:-20, z1:0,   openings:[ {from:35, to:275, h:210, porte:'baie'} ] },   // baie vitrée coulissante
+    { id:'sud',    x0:-20, x1:1009, z0:932, z1:952 },
+    { id:'ouest',  x0:-20, x1:0,    z0:0,   z1:932 },
+    { id:'est',    x0:989, x1:1009, z0:0,   z1:932 },
+    { id:'garage-cave2', x0:309, x1:329, z0:0, z1:932, openings:[
+        // ancienne porte (190 → 270) murée
+        {from:555, to:645, h:205} ] },
+    // cloison du local technique : plaques de plâtre sur ossature (10 cm), depuis le mur gauche,
+    // assez longue pour masquer la cuve (qui va jusqu'à 1,75 m) ; passage libre de 1,24 m côté cave 2
+    { id:'local-technique', x0:0, x1:185, z0:772, z1:782, mat:'murBlanc' },
+    { id:'cave2-cave1',  x0:657, x1:677, z0:0, z1:932, openings:[ {from:560, to:640, h:204} ] },
+    { id:'escalier-g', x0:449, x1:459, z0:0, z1:222 },
+    { id:'escalier-d-bas', x0:539, x1:549, z0:0, z1:88, h:106 },   // sous le palier
+    { id:'escalier-d', x0:539, x1:549, z0:88, z1:225 },
+    { id:'palier-renfoncement', x0:549, x1:657, z0:76, z1:88, h:107 },   // mur sous le palier, côté renfoncement
+    { id:'escalier-porte', x0:459, x1:539, z0:215, z1:222, openings:[ {from:459, to:539, h:204, porte:'porte', cote:'sud'} ] },
+  ],
+  // Escalier vers le RDC, en deux volées avec un palier au fond :
+  //  volée 1 maçonnée et carrelée derrière la porte blanche, qui monte vers le fond ;
+  //  palier au fond ; volée 2 en bois dans le renfoncement de 110 cm, qui revient vers la cave 2.
+  escalier: {
+    contremarches: 15,                                   // de 0 au niveau du RDC (hauteur + dalle)
+    volee1: { x0:459, x1:539, zBas:215, zPalier:88, marches:7 },
+    palier: { x0:459, x1:657, z0:0, z1:88 },
+    volee2: { x0:552, x1:654, zPalier:88, zHaut:225 },
+  },
+  // Doublage isolé de la cave 1 sur ses 3 murs extérieurs (du mur vers la pièce) :
+  // lame d'air 2 cm · ossature métallique 10 cm (montants tous les 60 cm) avec PIR/PUR 6 cm côté plaque · plaque hydro 12,5 mm
+  doublage: {
+    air:2, ossature:10, isolant:6, plaque:1.25, entraxe:60,
+    murs: [
+      { nom:'fond',   ax:'x', w:0,   s:1,  a0:677,   a1:987 },
+      { nom:'droite', ax:'z', w:989, s:-1, a0:13.25, a1:918.75 },
+      { nom:'avant',  ax:'x', w:932, s:-1, a0:677,   a1:987 },
+    ],
+  },
+  // Peinture blanche des murs de la cave 1 : plaques du doublage + mur côté cave 2 (parpaings peints)
+  peintureCave1: true,
+  // Faux plafond suspendu cave 1 : ossature T24, dalles 60×60, calepinage centré, entre les faces du doublage
+  fauxPlafond: { hauteur:220, x0:677, x1:975.75, z0:13.25, z1:918.75, module:60,
+                 panneauxLED: [[796.4,256],[796.4,496],[796.4,736]] },
+  // VMC double flux. Points des gaines : [x, y (axe de la gaine), z]. l × e = largeur × épaisseur de la gaine plate.
+  // Couches sous plafond : gaines extérieures au plus haut, distribution juste en dessous, gaine du garage plus bas aux croisements.
+  vmc: {
+    caisson: { x0:607, x1:657, z0:270, z1:340, y0:145, y1:220 },   // au mur, à côté de l'escalier vers le RDC
+    gaines: [
+      { nom:'Rejet d\'air vicié', mat:'gRej', l:20, e:6,
+        pts:[[645,220,277],[645,236,277],[645,236,238],[520,236,238],[520,236,212],[520,330,88],[520,330,-24]] },
+      { nom:'Prise d\'air neuf', mat:'gAir', l:20, e:6,
+        pts:[[620,220,277],[620,236,277],[620,236,262],[480,236,262],[480,236,212],[480,330,88],[480,330,-24]] },
+      { nom:'Extraction évier', mat:'gExt', l:13, e:5,
+        pts:[[618,220,333],[618,229,333],[416,229,333],[416,229,40]], bouche:[416,40] },
+      { nom:'Insufflation cave 2', mat:'gIns', l:13, e:5,
+        pts:[[632,220,336],[632,229,336],[632,229,880],[592,229,880]], bouche:[596,880] },
+      { nom:'Insufflation cave 1', mat:'gIns', l:13, e:5,
+        pts:[[648,220,336],[648,229,336],[648,229,356],[856.4,229,356],[856.4,229,130]], bouche:[856.4,136] },   // carottage juste à côté du caisson
+      { nom:'Insufflation garage', mat:'gIns', l:13, e:5,
+        pts:[[640,221.5,334],[640,221.5,352],[154,221.5,352],[154,221.5,120]], bouche:[154,120] },
+    ],
+    // grilles extérieures dans le mur du palier
+    grilles: [ [480,330], [520,330] ],
+  },
+  // trémie : ouverture du plafond au-dessus de l'escalier
+  tremie: { x0:459, x1:657, z0:0, z1:225 },
+};
+
+/* ---------------- Matériaux ---------------- */
+const MATS = {
+  blocs:   { tex:'blocs',  tile:[100,40] },
+  sol:     { tex:'beton',  tile:[220,220] },
+  plafond: { tex:'plafond',tile:[120,120] },
+  coupe:   { color:[0.20,0.215,0.23] },
+  dalle:   { color:[0.80,0.80,0.78] },
+  ply:     { tex:'ply',    tile:[122,122] },
+  bois:    { tex:'pin',    tile:[90,90] },
+  pg:      { tex:'pg',     tile:[120,50] },
+  blanc:   { color:[0.93,0.93,0.91] },
+  metal:   { color:[0.62,0.64,0.66] },
+  inox:    { color:[0.78,0.80,0.81] },
+  sombre:  { color:[0.30,0.31,0.33] },
+  gris:    { color:[0.47,0.49,0.52] },
+  bleu:    { color:[0.13,0.34,0.72] },
+  pvc:     { color:[0.90,0.92,0.92] },
+  neon:    { color:[1.0,1.0,0.97], emit:true },
+  cuve:    { color:[0.24,0.45,0.70] },
+  blancNacre:{ color:[0.95,0.95,0.93], k:1.05 },
+  noir:    { color:[0.11,0.11,0.12] },
+  sac:     { tex:'sac', tile:[58,23] },
+  cuivre:  { color:[0.78,0.45,0.25] },
+  alu:     { color:[0.23,0.25,0.27] },
+  verre:   { color:[0.55,0.73,0.85], alpha:0.40 },
+  'gris clair': { color:[0.80,0.81,0.82] },
+  bleuFonce:{ color:[0.12,0.20,0.48] },
+  beige:   { color:[0.93,0.84,0.68] },
+  agglo:   { color:[0.70,0.71,0.70] },
+  laiton:  { color:[0.76,0.60,0.30] },
+  vertFiltre:{ color:[0.45,0.70,0.60] },
+  stud:    { color:[0.70,0.73,0.76] },
+  gAir:    { color:[0.30,0.62,0.36] },
+  gIns:    { color:[0.25,0.50,0.85] },
+  gExt:    { color:[0.93,0.70,0.20] },
+  gRej:    { color:[0.55,0.36,0.24] },
+  caisson: { color:[0.94,0.94,0.93] },
+  t24:     { color:[0.95,0.95,0.94], k:1.5 },
+  murBlanc:{ color:[0.94,0.94,0.92], k:1.08 },
+  blocsPeints:{ tex:'blocsPeints', tile:[100,40], k:1.08 },
+  dalleMin:{ tex:'dalleMin', tile:[60,60], k:1.5 },
+  pir:     { color:[0.88,0.80,0.55] },
+  gyproc:  { tex:'gyproc', tile:[120,120] },
+  carrelage:{ tex:'carreaux', tile:[60,60] },
+  terrain: { color:[0.855,0.862,0.835] },
+};
+
+/* ---------------- Scène ---------------- */
+const ITEM_LABELS = [
+  { t:'Baie vitrée coulissante', p:[155,160,-4] },
+  { t:'Escalier vers le RDC', p:[603,175,160], plan:[560,0,262] },
+  { t:'Palier', p:[500,135,40], noPlan:true },
+  { t:'Évier', p:[416,96,26], noPlan:true },
+  { t:'Doublage isolé', p:[976,150,466], gauche:true, plan:[976,0,250] },
+  { t:'VMC double flux', p:[605,200,305], gauche:true },
+  { t:'Extraction', p:[416,222,40] },
+  { t:'Insufflation', p:[596,222,880] },
+  { t:'Insufflation', p:[856,216,136] },
+  { t:'Insufflation', p:[154,214,120] },
+  { t:'Prise d\'air neuf + rejet', p:[500,352,-24] },
+  { t:'Carottage', p:[667,229,356], noPlan:true },
+  { t:'Carottage', p:[319,221,352], noPlan:true },
+  { t:'Tableau électrique', p:[352,186,26], noPlan:true },
+  { t:'Arrivée d\'eau', p:[440,160,30], gauche:true, noPlan:true },
+  { t:'Adoucisseur', p:[428,60,218], gauche:true },
+  { t:'Pompe à eau', p:[16,170,490] },
+  { t:'Cuve à mazout 1200 L', p:[95,178,880], si:'cuve' },
+  { t:'Coffre de toit sur support bois', p:[379,236,815] },
+  { t:'Palettes de pellets', p:[381,72,760] },
+  { t:'Ballon Vitocell 100-V 300 L', p:[37,182,896], si:'pac' },
+  { t:'PAC (unité intérieure)', p:[106,205,912], si:'pac', plan:[106,0,880] },
+];
+const DIMS = [
+  // [axe, fixe, début, fin, texte]
+  ['x', 1000, 0, 309, '309'], ['x', 1000, 329, 657, '328'], ['x', 1000, 677, 989, '312'],
+  ['x', -70, 0, 309, '309'], ['x', -70, 329, 449, '120'], ['x', -70, 549, 657, '110'], ['x', -70, 677, 989, '312'],
+  ['z', -75, 0, 932, '933'], ['z', 1065, 0, 932, '932'],
+  ['x', 860, 677, 975.75, '299'], ['z', 945, 13.25, 918.75, '906'],   // cave 1 après doublage
+];
+
+class Geo {
+  constructor(){ this.b = {}; }
+  v(m,p,n,u,w){ (this.b[m] || (this.b[m]=[])).push(p[0],p[1],p[2],n[0],n[1],n[2],u,w); }
+  quad(m,ps,n,kind){
+    const t = MATS[m].tile || [100,100];
+    const uv = p => kind==='x' ? [p[2]/t[0], p[1]/t[1]] : kind==='z' ? [p[0]/t[0], p[1]/t[1]] : [p[0]/t[0], p[2]/t[1]];
+    for (const i of [0,1,2,0,2,3]) { const q = uv(ps[i]); this.v(m, ps[i], n, q[0], q[1]); }
+  }
+  box(x0,x1,y0,y1,z0,z1,m,o={}){
+    const s = o.side || m, top = o.top || m, bot = o.bottom || m;
+    this.quad(s,[[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]],[1,0,0],'x');
+    this.quad(s,[[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]],[-1,0,0],'x');
+    this.quad(s,[[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],[0,0,1],'z');
+    this.quad(s,[[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]],[0,0,-1],'z');
+    this.quad(top,[[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]],[0,1,0],'y');
+    if (!o.noBottom) this.quad(bot,[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]],[0,-1,0],'y');
+  }
+  // gaine inclinée dans le plan (z,y), largeur selon x
+  slope(x0,x1,z0,y0,z1,y1,e,m){
+    const dz=z1-z0, dy=y1-y0, L=Math.hypot(dz,dy), nz=-dy/L, ny=dz/L, h=e/2;
+    const A=[z0-nz*h,y0-ny*h], B=[z0+nz*h,y0+ny*h], C=[z1+nz*h,y1+ny*h], D=[z1-nz*h,y1-ny*h];
+    const P=(x,q)=>[x,q[1],q[0]];
+    this.quad(m,[P(x0,B),P(x1,B),P(x1,C),P(x0,C)],[0,ny,nz],'y');
+    this.quad(m,[P(x0,A),P(x1,A),P(x1,D),P(x0,D)],[0,-ny,-nz],'y');
+    this.quad(m,[P(x1,A),P(x1,B),P(x1,C),P(x1,D)],[1,0,0],'x');
+    this.quad(m,[P(x0,A),P(x0,B),P(x0,C),P(x0,D)],[-1,0,0],'x');
+    this.quad(m,[P(x0,A),P(x1,A),P(x1,B),P(x0,B)],[0,-dy/L,-dz/L],'y');
+    this.quad(m,[P(x0,D),P(x1,D),P(x1,C),P(x0,C)],[0,dy/L,dz/L],'y');
+  }
+  // pièce inclinée dans le plan (x,y), épaisseur selon z
+  slopeXY(z0,z1,x0,y0,x1,y1,e,m){
+    const dx=x1-x0, dy=y1-y0, L=Math.hypot(dx,dy), nx=-dy/L, ny=dx/L, h=e/2;
+    const A=[x0-nx*h,y0-ny*h], B=[x0+nx*h,y0+ny*h], C=[x1+nx*h,y1+ny*h], D=[x1-nx*h,y1-ny*h];
+    const P=(z,q)=>[q[0],q[1],z];
+    this.quad(m,[P(z0,B),P(z1,B),P(z1,C),P(z0,C)],[nx,ny,0],'z');
+    this.quad(m,[P(z0,A),P(z1,A),P(z1,D),P(z0,D)],[-nx,-ny,0],'z');
+    this.quad(m,[P(z1,A),P(z1,B),P(z1,C),P(z1,D)],[0,0,1],'z');
+    this.quad(m,[P(z0,A),P(z0,B),P(z0,C),P(z0,D)],[0,0,-1],'z');
+    this.quad(m,[P(z0,A),P(z1,A),P(z1,B),P(z0,B)],[-dx/L,-dy/L,0],'z');
+    this.quad(m,[P(z0,D),P(z1,D),P(z1,C),P(z0,C)],[dx/L,dy/L,0],'z');
+  }
+  // prisme à section arrondie (x,y) allongé selon z
+  roundZ(z0,z1,xc,yc,hw,hh,r,m,cs=6){
+    const pts=[];
+    for (const [sx,sy,a0] of [[1,1,0],[-1,1,Math.PI/2],[-1,-1,Math.PI],[1,-1,Math.PI*1.5]])
+      for (let i=0;i<=cs;i++){ const a=a0+i/cs*Math.PI/2; pts.push([xc+sx*(hw-r)+Math.cos(a)*r, yc+sy*(hh-r)+Math.sin(a)*r, Math.cos(a), Math.sin(a)]); }
+    for (let i=0;i<pts.length;i++){
+      const a=pts[i], b=pts[(i+1)%pts.length];
+      for (const [p,z] of [[a,z0],[b,z0],[b,z1],[a,z0],[b,z1],[a,z1]]) this.v(m,[p[0],p[1],z],[p[2],p[3],0],0,0);
+      for (const [z,nz] of [[z0,-1],[z1,1]]){ const n=[0,0,nz]; this.v(m,[xc,yc,z],n,0,0); this.v(m,[a[0],a[1],z],n,0,0); this.v(m,[b[0],b[1],z],n,0,0); }
+    }
+  }
+  // prisme à section arrondie (z,y) allongé selon x : cuve ovale
+  roundX(x0,x1,zc,yc,hw,hh,r,m,cs=6){
+    const pts=[];
+    for (const [sz,sy,a0] of [[1,1,0],[-1,1,Math.PI/2],[-1,-1,Math.PI],[1,-1,Math.PI*1.5]])
+      for (let i=0;i<=cs;i++){ const a=a0+i/cs*Math.PI/2; pts.push([zc+sz*(hw-r)+Math.cos(a)*r, yc+sy*(hh-r)+Math.sin(a)*r, Math.cos(a), Math.sin(a)]); }
+    const t=MATS[m].tile||[100,100];
+    for (let i=0;i<pts.length;i++){
+      const a=pts[i], b=pts[(i+1)%pts.length];
+      for (const [p,x] of [[a,x0],[b,x0],[b,x1],[a,x0],[b,x1],[a,x1]]) this.v(m,[x,p[1],p[0]],[0,p[3],p[2]],x/t[0],(p[0]+p[1])/t[1]);
+      for (const [x,nx] of [[x0,-1],[x1,1]]){ const n=[nx,0,0]; this.v(m,[x,yc,zc],n,0,0); this.v(m,[x,a[1],a[0]],n,0,0); this.v(m,[x,b[1],b[0]],n,0,0); }
+    }
+  }
+  // cylindre partant du centre c et allant le long de l'axe sur len
+  cyl(axis,c,r,len,m,seg=20){
+    const t = MATS[m].tile || [100,100];
+    const map = (a,b,s) => axis==='y' ? [c[0]+a,c[1]+s,c[2]+b] : axis==='x' ? [c[0]+s,c[1]+a,c[2]+b] : [c[0]+a,c[1]+b,c[2]+s];
+    const dir = (a,b,s) => axis==='y' ? [a,s,b] : axis==='x' ? [s,a,b] : [a,b,s];
+    for (let i=0;i<seg;i++){
+      const A=i/seg*Math.PI*2, B=(i+1)/seg*Math.PI*2;
+      const P=(g,s)=>map(Math.cos(g)*r,Math.sin(g)*r,s), N=g=>dir(Math.cos(g),Math.sin(g),0);
+      for (const [g,s] of [[A,0],[B,0],[B,len],[A,0],[B,len],[A,len]]) this.v(m,P(g,s),N(g),g*r/t[0],s/t[1]);
+      for (const s of [0,len]){ const n=dir(0,0,s?1:-1); this.v(m,map(0,0,s),n,0,0); this.v(m,P(A,s),n,0,0); this.v(m,P(B,s),n,0,0); }
+    }
+  }
+}
+
+function wallAxis(w){ return (w.x1-w.x0) > (w.z1-w.z0) ? 'x' : 'z'; }
+
+function buildScene(opts){
+  const g = new Geo(), H = MODEL.hauteur, Hc = (opts.mursBas || opts.enPlan) ? 100 : H;
+
+  // terrain et sol
+  g.box(-1600,2600,-4,-3,-1600,2550,'terrain',{noBottom:true});
+  g.box(-20,1009,-15,0,-20,952,'sol',{side:'coupe',noBottom:true});
+
+  // murs
+  for (const w of MODEL.walls){
+    const ax = wallAxis(w), s0 = ax==='x'?w.x0:w.z0, s1 = ax==='x'?w.x1:w.z1;
+    const seg = (a,b,y0,y1) => {
+      if (b-a < .5 || y1-y0 < .5) return;
+      y1 = Math.min(y1, w.h || y1); if (y1-y0 < .5) return;
+      const wm = w.mat || 'blocs';
+      if (ax==='x') g.box(a,b,y0,y1,w.z0,w.z1,wm,{top:'coupe'});
+      else g.box(w.x0,w.x1,y0,y1,a,b,wm,{top:'coupe'});
+    };
+    let cur = s0;
+    for (const o of (w.openings||[]).slice().sort((a,b)=>a.from-b.from)){
+      seg(cur,o.from,0,Hc);
+      if (o.h < Hc) seg(o.from,o.to,o.h,Hc);
+      cur = o.to;
+      addLeaf(g,w,ax,o,Hc);
+    }
+    seg(cur,s1,0,Hc);
+  }
+
+  // plafond (avec trémie de l'escalier)
+  if (opts.plafond && !opts.enPlan){
+    const d = MODEL.dalle, T = MODEL.tremie, y0=H, y1=H+d, o={bottom:'plafond',side:'coupe',top:'dalle'};
+    g.box(-20,T.x0,y0,y1,-20,952,'dalle',o);
+    g.box(T.x1,1009,y0,y1,-20,952,'dalle',o);
+    g.box(T.x0,T.x1,y0,y1,-20,T.z0,'dalle',o);
+    g.box(T.x0,T.x1,y0,y1,T.z1,952,'dalle',o);
+    // tubes fluorescents
+    for (const [x,z] of [[154,260],[154,640],[493,420],[493,740],[833,300],[833,680]]){
+      if (x > 677 && opts.fauxPlafond) continue;     // cave 1 : éclairage dans le faux plafond
+      g.box(x-6,x+6,H-9,H-1,z-75,z+75,'blanc');
+      g.box(x-3,x+3,H-11,H-9,z-72,z+72,'neon');
+    }
+  }
+
+  // doublage isolé cave 1
+  for (const D of MODEL.doublage.murs) doublage(g,D,Hc,opts.plaques);
+  // peinture blanche sur le mur en parpaings côté cave 1 (hors passage)
+  if (MODEL.peintureCave1) for (const [z0,z1] of [[0,560],[640,932]]) g.box(677,677.4,0,Hc,z0,z1,'blocsPeints');
+  if (MODEL.peintureCave1){                         // tableau du passage cave 2 / cave 1 peint aussi
+    const hp = Math.min(204,Hc);
+    g.box(657,677,0,hp,560,560.4,'blocsPeints'); g.box(657,677,0,hp,639.6,640,'blocsPeints');
+    if (Hc > 204){ g.box(657,677,203.6,204,560,640,'blocsPeints'); g.box(677,677.4,204,Hc,560,640,'blocsPeints'); }   // dessous et face du linteau
+  }
+
+  // VMC double flux
+  if (opts.vmc) vmc(g,Hc,opts);
+  const fpActif = opts.fauxPlafond && Hc >= H;
+  if (fpActif) fauxPlafond(g);
+
+  // escalier
+  const E = MODEL.escalier, r = (H+MODEL.dalle)/E.contremarches;
+  const v1 = E.volee1, n1 = v1.marches, g1 = (v1.zBas - v1.zPalier)/(n1-1), yP = n1*r;
+  for (let i=1;i<n1;i++){                                  // volée 1 maçonnée, carrelée
+    const zf = v1.zBas-(i-1)*g1;
+    g.box(v1.x0,v1.x1,0,i*r,zf-g1,zf,'carrelage');
+    g.box(v1.x0,v1.x1,i*r,i*r+1,zf-2.5,zf,'pvc');            // nez de marche
+  }
+  const P = E.palier;
+  g.box(v1.x0,v1.x1,0,yP,P.z0,P.z1,'carrelage');             // palier, partie maçonnée
+  g.box(v1.x1,P.x1,yP-14,yP,P.z0,P.z1,'carrelage');          // palier au-dessus du renfoncement
+  const v2 = E.volee2, n2 = E.contremarches-n1, g2 = (v2.zHaut-v2.zPalier)/(n2-1);
+  for (let j=1;j<n2;j++){                                  // volée 2 en bois, marches ouvertes
+    const top = yP + j*r, zb = v2.zPalier+(j-1)*g2;
+    g.box(v2.x0,v2.x1,top-4,top,zb-1,zb+g2+2,'bois');
+    for (const x of [v2.x0-3,v2.x1-2]) g.box(x,x+5,top-26,top-4,zb,zb+g2,'bois');   // limons
+  }
+  // --- coin évier / technique (cave 2), d'après les photos ---
+  // table en aggloméré contre le mur gauche
+  g.box(329,386,86,89,0,60,'agglo');                // plateau
+  g.box(380,385,0,86,54,59,'bois');                 // pied avant
+  g.box(380,385,0,86,1,6,'bois');                   // pied arrière
+  // évier blanc contre le mur du fond, crédence en carreaux gris
+  g.box(386,446,56,92,2,52,'blanc');
+  g.box(391,441,74,92.2,7,47,'sombre');             // cuve
+  g.box(386,446,92,94,2,52,'blanc');
+  g.box(372,446,89,150,0,1.5,'carrelage');          // crédence
+  // alimentations au mur du fond : 3 tuyaux blancs, vannes et robinets
+  for (const x of [397,413,429]) g.cyl('y',[x,122,4],1.4,H-14-122,'pvc',10);
+  g.box(392,434,118,123,1.5,5,'metal');
+  g.box(397,403,121,125,5,10,'bleu');               // vanne bleue
+  g.cyl('y',[413,96,6],1.2,24,'laiton',8);          // flexible jaune
+  // gaines et évacuations en haut des murs
+  g.cyl('x',[329,H-12,4],3,117,'gris',12);
+  g.cyl('x',[329,H-24,5],2.2,117,'pvc',10);
+  g.cyl('y',[333,184,4],4,H-184,'gris',12);         // descente grise, angle gauche
+  // mur de droite : arrivée d'eau (vannes en laiton, filtre) et tuyaux
+  g.box(438,449,124,140,18,40,'laiton');
+  g.cyl('y',[442,136,46],4,18,'vertFiltre',12);
+  g.cyl('y',[445,96,30],1.6,28,'inox',8);           // flexible vers l'adoucisseur
+  g.cyl('y',[446,150,58],3,H-150,'gris',12);        // tuyau gris vertical
+  for (const z of [92,100,108]) g.cyl('y',[446,110,z],1.5,H-110,'pvc',10);
+  // tableau électrique au mur gauche, au-dessus de la table
+  if (Hc > 200){
+    g.box(329,350,104,184,4,48,'sombre');
+    g.box(350,352,108,180,10,24,'blanc');           // rangée de modules
+    g.box(350,353,140,172,30,44,'blanc');           // compteur
+  }
+  // adoucisseur (armoire) contre le mur de droite, presque à l'aplomb de l'angle du mur de l'escalier
+  g.box(408,447,0,6,172,218,'bleu');
+  g.box(408,447,6,88,172,218,'gris clair');
+  g.box(408,447,88,93,172,218,'bleu');
+  g.roundX(409,446,195,102,22,10,9,'bleuFonce',6);  // couvercle
+
+  // --- garage ---
+  // groupe de pompe sur le mur gauche
+  if (Hc > 100){
+    g.box(0,2,92,128,470,505,'blanc');
+    g.cyl('z',[13,112,474],9,28,'bleu',16);
+    g.cyl('z',[13,112,502],6,10,'gris',12);
+    g.cyl('y',[9,96,457],6,34,'bleu',16);
+    g.cyl('z',[7,146,438],2.6,100,'pvc',10);
+    g.cyl('y',[7,146,536],2.6,H-146-2,'pvc',10);
+    g.cyl('y',[9,130,457],2.6,16,'pvc',10);
+  }
+  rangementCave2(g);
+
+  if (opts.chaufferie === 'cuve'){
+    // cuve à mazout 1200 L, acier ovale debout, d'après la photo :
+    // ~1,60 m le long du mur du fond, 72 cm de profondeur, dessus à 1,70 m (8,5 rangs), posée sur 2 parpaings
+    const cv = { x0:15, x1:175, zc:892, yc:95, hw:36, hh:75, r:24 };
+    for (const x of [28,142]) g.box(x,x+20,0,20,867,917,'blocs',{top:'sombre'});     // parpaings
+    g.roundX(cv.x0+2,cv.x1-2,cv.zc,cv.yc,cv.hw,cv.hh,cv.r,'cuve',8);                // corps
+    for (const x of [cv.x0,cv.x1-2]) g.roundX(x,x+2,cv.zc,cv.yc,cv.hw+1.2,cv.hh+1.2,cv.r+1.2,'cuve',8); // collerettes
+    for (const x of [34,148]) for (const z of [cv.zc-cv.hw+6,cv.zc+cv.hw-9])        // pieds en tôle
+      g.box(x,x+8,18,32,z,z+3,'metal');
+    g.cyl('y',[160,170,892],7,5,'metal',16);          // bouchon de remplissage
+    g.cyl('y',[30,168,900],1.2,40,'cuivre',8);         // tuyau vers le mur
+  } else pacEtBallon(g,H);
+
+  return g.b;
+}
+
+// Fond de la cave 2 (d'après la photo) : support en bois maison pour le coffre de toit,
+// fixé au mur du fond près de l'angle côté garage, et 2 palettes de pellets en dessous.
+function rangementCave2(g){
+  const zw = 932;                                     // face du mur du fond (pour les palettes)
+  const xw = 329;                                     // face du mur garage / cave 2, côté cave 2
+  // 2 consoles en bois fixées au mur côté garage, au-dessus des palettes (montant + bras + écharpe)
+  for (const z of [842,905]){
+    g.box(xw,xw+6,105,190,z,z+4.5,'bois');            // montant contre le mur
+    g.box(xw,xw+80,183,190,z,z+4.5,'bois');           // bras
+    g.slopeXY(z,z+4.5,xw+3,112,xw+66,186,4.5,'bois'); // écharpe
+  }
+  for (const x of [xw+28,xw+72]) g.box(x,x+7,190,194,730,922,'bois');   // deux lattes porteuses
+  // coffre de toit noir, posé sur les lattes (≈ 210 × 90 × 38 cm), parallèle au mur
+  const xc = xw+50;
+  g.roundZ(736,898,xc,213,45,19,16,'noir',8);
+  g.roundZ(898,922,xc,210,41,16,14,'noir',8);         // arrière
+  g.roundZ(708,736,xc,209,39,15,14,'noir',8);         // avant (nez)
+  // 2 palettes europe (120 × 80 × 14,4) l'une derrière l'autre, avec sacs de pellets de 15 kg
+  for (const z0 of [zw-120, zw-240]){
+    const x0 = 341;
+    for (const bx of [0,35,70]) g.box(x0+bx,x0+bx+10,0,2.2,z0,z0+120,'bois');
+    for (const bx of [0,32.75,65.5]) for (const bz of [0,52.75,105.5]) g.box(x0+bx,x0+bx+14.5,2.2,10,z0+bz,z0+bz+14.5,'bois');
+    for (const bz of [0,52.75,105.5]) g.box(x0,x0+80,10,12.2,z0+bz,z0+bz+14.5,'bois');
+    let bx = 0; for (const w of [14.5,10,14.5,10,14.5]){ g.box(x0+bx,x0+bx+w,12.2,14.4,z0,z0+120,'bois'); bx += w+4.125; }
+    const R = rng(z0|0); const couches = z0 > 800 ? 5 : 4;
+    for (let c=0;c<couches;c++) for (let i=0;i<2;i++) for (let j=0;j<2;j++){
+      const jx=(R()-.5)*3, jz=(R()-.5)*4, y=14.4+c*11.5;
+      g.box(x0+i*40+1+jx,x0+i*40+39+jx,y,y+11,z0+j*60+1+jz,z0+j*60+59+jz,'sac');
+    }
+  }
+}
+
+// PAC (unité intérieure murale) + ballon Viessmann Vitocell 100-V 300 L dans le coin du garage
+// Ballon : Ø 63,3 cm, hauteur 174,6 cm (fiche technique 300 L). Unité intérieure de PAC : gabarit générique 45 × 92 × 38 cm.
+function pacEtBallon(g,H){
+  const B = { x:37, z:896, r:31.7, h:174.6 };
+  for (const [dx,dz] of [[-18,-18],[18,-18],[-18,18],[18,18]]) g.cyl('y',[B.x+dx,0,B.z+dz],2,3,'gris',8);   // pieds réglables
+  g.cyl('y',[B.x,3,B.z],B.r,B.h-6,'blancNacre',32);
+  g.cyl('y',[B.x,B.h-3,B.z],B.r-0.5,3,'gris clair',32);
+  g.box(B.x-8,B.x+8,B.h-26,B.h-12,B.z-B.r-1.5,B.z-B.r+2,'gris clair');                 // thermomètre / régulation
+  for (const y of [28,60,110,150]) g.cyl('z',[B.x+B.r-6,y,B.z-B.r-6],1.6,10,'cuivre',8); // piquages
+  // unité intérieure de PAC au mur du fond, à droite du ballon
+  const P = { x0:84, x1:129, y0:105, y1:197, z0:894, z1:932 };
+  g.box(P.x0,P.x1,P.y0,P.y1,P.z0,P.z1,'blanc');
+  g.box(P.x0+3,P.x1-3,P.y0+6,P.y1-6,P.z0-0.6,P.z0,'gris clair');
+  g.box(P.x0+14,P.x1-14,P.y1-30,P.y1-20,P.z0-1,P.z0-0.6,'sombre');                    // écran
+  // liaisons hydrauliques PAC ↔ ballon et liaisons frigorifiques vers l'unité extérieure
+  for (const y of [70,82]) g.box(B.x+B.r-6,P.x0+12,y-1.6,y+1.6,B.z-B.r-8,B.z-B.r-4.8,'cuivre');
+  for (const x of [P.x0+12,P.x0+20]) g.box(x-1.6,x+1.6,70,P.y0,B.z-B.r-8,B.z-B.r-4.8,'cuivre');
+  for (const x of [P.x0+10,P.x0+22,P.x1-10]) g.cyl('y',[x,P.y1,P.z1-12],1.8,H-P.y1,'cuivre',8);
+}
+
+function fauxPlafond(g){
+  const F = MODEL.fauxPlafond, y = F.hauteur, m = F.module;
+  const lignes = (a0,a1) => { const L=a1-a0; let n=Math.floor(L/m), b=(L-n*m)/2; if (b<20){ n--; b+=m/2; } const r=[]; for(let k=0;k<=n;k++) r.push(a0+b+k*m); return r; };
+  const xs = lignes(F.x0,F.x1), zs = lignes(F.z0,F.z1);
+  g.box(F.x0,F.x1,y+0.6,y+2.2,F.z0,F.z1,'dalleMin',{side:'dalleMin'});           // dalles
+  for (const x of xs) g.box(x-1.2,x+1.2,y,y+3.8,F.z0,F.z1,'t24');                 // porteurs / entretoises
+  for (const z of zs) g.box(F.x0,F.x1,y,y+3.8,z-1.2,z+1.2,'t24');
+  g.box(F.x0,F.x0+2.4,y,y+2.4,F.z0,F.z1,'t24'); g.box(F.x1-2.4,F.x1,y,y+2.4,F.z0,F.z1,'t24');   // cornières de rive
+  g.box(F.x0,F.x1,y,y+2.4,F.z0,F.z0+2.4,'t24'); g.box(F.x0,F.x1,y,y+2.4,F.z1-2.4,F.z1,'t24');
+  for (let i=0;i<xs.length;i+=2) for (let j=0;j<zs.length;j+=2) g.box(xs[i]-0.3,xs[i]+0.3,y+3.8,MODEL.hauteur,zs[j]-0.3,zs[j]+0.3,'metal');   // suspentes
+  for (const [x,z] of F.panneauxLED){ g.box(x-29.5,x+29.5,y-0.2,y+0.6,z-29.5,z+29.5,'t24'); g.box(x-27,x+27,y-0.3,y+0.2,z-27,z+27,'neon'); }
+}
+
+function vmc(g,Hc,opts){
+  const V = MODEL.vmc, K = V.caisson, H = MODEL.hauteur;
+  // caisson
+  g.box(K.x0,K.x1-1,K.y0,K.y1,K.z0,K.z1,'caisson');
+  g.box(K.x0-1,K.x0,K.y0+8,K.y1-8,K.z0+6,K.z1-6,'gris clair');      // façade
+  g.box(K.x0-1.5,K.x0-1,K.y1-26,K.y1-16,K.z0+12,K.z0+30,'sombre');   // écran
+  g.box(K.x1-35,K.x1-1,K.y1,K.y1+6,K.z1-14,K.z1,'gIns');             // plénum d'insufflation
+  // gaines
+  for (const G of V.gaines){
+    const P=G.pts, l=G.l, e=G.e, n=P.length-1;
+    for (let i=0;i<n;i++){
+      const a=P[i], b=P[i+1], s0 = i>0 ? l/2 : 0, s1 = i<n-1 ? l/2 : 0;
+      const dx=b[0]-a[0], dy=b[1]-a[1], dz=b[2]-a[2], moving=[dx,dy,dz].filter(v=>Math.abs(v)>0.01).length;
+      if (moving>1){ g.slope(a[0]-l/2,a[0]+l/2,a[2],a[1],b[2],b[1],e,G.mat); continue; }
+      if (Math.abs(dx)>0.01){ const lo=dx>0?a[0]-s0:b[0]-s1, hi=dx>0?b[0]+s1:a[0]+s0;
+        g.box(lo,hi,a[1]-e/2,a[1]+e/2,a[2]-l/2,a[2]+l/2,G.mat); }
+      else if (Math.abs(dz)>0.01){ const lo=dz>0?a[2]-s0:b[2]-s1, hi=dz>0?b[2]+s1:a[2]+s0;
+        g.box(a[0]-l/2,a[0]+l/2,a[1]-e/2,a[1]+e/2,lo,hi,G.mat); }
+      else g.box(a[0]-l/2,a[0]+l/2,Math.min(a[1],b[1]),Math.max(a[1],b[1])+e/2,a[2]-e/2,a[2]+e/2,G.mat);
+    }
+    const F = MODEL.fauxPlafond;
+    if (G.bouche && opts.fauxPlafond && Hc >= H && G.bouche[0] > F.x0 && G.bouche[0] < F.x1){   // diffuseur 60×60 intégré au faux plafond
+      const [bx,bz] = G.bouche, y = F.hauteur;
+      g.box(bx-12,bx+12,y+2.2,P[n][1]-e/2,bz-12,bz+12,G.mat);
+      g.box(bx-29.5,bx+29.5,y-0.3,y+0.6,bz-29.5,bz+29.5,'blanc');
+      for (let k=6;k<=24;k+=6) g.box(bx-k,bx+k,y-0.6,y-0.3,bz-k,bz+k,k%12?'gris clair':'blanc');
+    } else if (G.bouche){                            // bouche au plafond, sous la gaine
+      const y = P[n][1]-e/2;
+      g.box(G.bouche[0]-7,G.bouche[0]+7,y-3,y,G.bouche[1]-7,G.bouche[1]+7,G.mat);
+      g.cyl('y',[G.bouche[0],y-5.5,G.bouche[1]],9,2.5,'blanc',20);
+    }
+  }
+  // mur du palier au-dessus du niveau du plafond, avec les deux grilles extérieures
+  if (Hc >= H){
+    g.box(449,677,H,360,-20,0,'blocs',{top:'coupe'});
+    for (const [x,y] of V.grilles){ g.box(x-15,x+15,y-15,y+15,-24,-20,'alu'); for (let k=-10;k<=10;k+=5) g.box(x-12,x+12,y+k-0.8,y+k+0.8,-25,-24,'gris'); }
+  }
+}
+
+function doublage(g,D,Hc,plaques){
+  const L = MODEL.doublage, full = Hc >= MODEL.hauteur, h = Hc;
+  const put = (b0,b1,y0,y1,d0,d1,m) => {
+    const p = D.w + D.s*d0, q = D.w + D.s*d1, c0 = Math.min(p,q), c1 = Math.max(p,q);
+    if (D.ax==='x') g.box(b0,b1,y0,y1,c0,c1,m); else g.box(c0,c1,y0,y1,b0,b1,m);
+  };
+  const f0 = L.air, f1 = L.air + L.ossature, top = full ? h-4 : h;
+  const xs = []; for (let a=D.a0; a < D.a1-5; a += L.entraxe) xs.push(a); xs.push(D.a1-5);
+  // plaques posées : l'ossature est cachée, on ne garde que sa coupe en tête (lisible en vue en plan)
+  const y0 = plaques ? h-0.6 : 4, yt = plaques ? h : top;
+  if (!plaques){
+    put(D.a0,D.a1,0,4,f0,f1,'stud');                     // rail bas
+    if (full) put(D.a0,D.a1,h-4,h,f0,f1,'stud');         // rail haut
+  }
+  for (const a of xs) put(a,a+5,y0,yt,f0,f1,'stud');     // montants en C
+  for (let i=0;i<xs.length-1;i++) put(xs[i]+5,xs[i+1],y0,yt,f1-L.isolant-0.4,f1-0.4,'pir');   // isolant côté plaque
+  if (plaques) put(D.a0,D.a1,0,h,f1,f1+L.plaque,MODEL.peintureCave1 ? 'murBlanc' : 'gyproc');
+}
+
+function addLeaf(g,w,ax,o,Hc){
+  if (!o.porte) return;
+  const h = Math.min(o.h-1, Hc);
+  if (o.porte === 'baie'){                       // baie vitrée : 2 fixes sur les côtés, 2 vantaux coulissants au centre
+    const a=o.from, b=o.to, p=6;                    // p : largeur des profilés du dormant
+    g.box(a,a+p,0,h,-16,-4,'alu'); g.box(b-p,b,0,h,-16,-4,'alu');      // montants
+    g.box(a,b,h-p,h,-16,-4,'alu'); g.box(a,b,0,3,-16,-4,'alu');        // traverse haute, seuil
+    const x0=a+p, x1=b-p, mid=(x0+x1)/2, wv=(x1-x0)/4, rec=3;
+    const vantail=(l,r,z0,z1,poignee)=>{
+      const sp=5.5;
+      g.box(l,l+sp,3,h-p,z0,z1,'alu'); g.box(r-sp,r,3,h-p,z0,z1,'alu');
+      g.box(l,r,3,9,z0,z1,'alu'); g.box(l,r,h-p-sp,h-p,z0,z1,'alu');
+      g.box(l+sp,r-sp,9,h-p-sp,(z0+z1)/2-0.6,(z0+z1)/2+0.6,'verre');
+      if (poignee) g.box(poignee-1.5,poignee+1.5,90,125,z1,z1+3,'inox');
+    };
+    vantail(x0,x0+wv+rec,-15,-11);                  // fixe gauche (rail extérieur)
+    vantail(x1-wv-rec,x1,-15,-11);                  // fixe droit
+    vantail(mid-wv-rec,mid,-10,-6,mid-3);           // coulissant gauche (rail intérieur)
+    vantail(mid,mid+wv+rec,-10,-6,mid+3);           // coulissant droit
+    return;
+  }
+  const mat = o.porte === 'panneau' ? 'ply' : 'blanc';
+  if (ax === 'z'){
+    const xm = o.cote==='est' ? w.x1-4 : (w.x0+w.x1)/2-2;
+    g.box(xm,xm+3.5,0,h,o.from+1,o.to-1,mat);
+    if (mat==='blanc') g.box(xm+3.5,xm+6,98,102,o.to-12,o.to-4,'inox');
+  } else {
+    const zm = o.cote==='sud' ? w.z1-4 : (w.z0+w.z1)/2-2;
+    g.box(o.from+1,o.to-1,0,h,zm,zm+3.5,mat);
+    if (mat==='blanc'){
+      g.box(o.from+10,o.to-10,30,h-30,zm+3.5,zm+4.5,'blanc');
+      g.box(o.from+6,o.from+14,98,102,zm+4.5,zm+7,'inox');
+    }
+  }
+}
+
+/* ---------------- Textures procédurales ---------------- */
+function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function cv(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
+
+function texBlocs(){
+  const c=cv(512,256), x=c.getContext('2d'), R=rng(7);
+  x.fillStyle='#d2cfc7'; x.fillRect(0,0,512,256);
+  const bw=256, bh=128, mx=6, my=7, shades=[[168,6],[158,-4]];
+  for (let row=0; row<2; row++){
+    const off = row ? 128 : 0;
+    for (let k=-1; k<3; k++){
+      const bx=k*bw+off+mx/2, by=row*bh+my/2, w=bw-mx, h=bh-my;
+      const sh = shades[((k%2)+2)%2][0] + (row?4:0);
+      x.fillStyle=`rgb(${sh},${sh+1},${sh-3})`; x.fillRect(bx,by,w,h);
+      for (let i=0;i<2600;i++){
+        const v=R(), col = v<.55 ? 92+R()*55 : 188+R()*45, s=1+R()*2.6;
+        x.fillStyle=`rgba(${col|0},${col|0},${(col-4)|0},${(.5+R()*.45).toFixed(2)})`;
+        x.fillRect(bx+R()*(w-s), by+R()*(h-s), s, s);
+      }
+    }
+  }
+  return c;
+}
+function texBeton(){
+  const c=cv(512,512), x=c.getContext('2d'), R=rng(11);
+  x.fillStyle='#c9c4b9'; x.fillRect(0,0,512,512);
+  for (let i=0;i<70;i++){
+    const px=R()*512, py=R()*512, rr=30+R()*110, d=R()<.5;
+    const gr=x.createRadialGradient(px,py,0,px,py,rr);
+    gr.addColorStop(0, d?'rgba(120,112,100,.07)':'rgba(255,255,250,.08)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+    x.fillStyle=gr; x.fillRect(px-rr,py-rr,rr*2,rr*2);
+  }
+  for (let i=0;i<26000;i++){ const v=R()<.5?80:255; x.fillStyle=`rgba(${v},${v},${v},.07)`; x.fillRect(R()*512,R()*512,1.4,1.4); }
+  return c;
+}
+function texPlafond(){
+  const c=cv(512,512), x=c.getContext('2d');
+  x.fillStyle='#9a9ea1'; x.fillRect(0,0,512,512);
+  x.lineWidth=1.3;
+  for (let i=-512;i<=1024;i+=16){
+    x.strokeStyle='rgba(255,255,255,.20)';
+    x.beginPath(); x.moveTo(i,0); x.lineTo(i+512,512); x.stroke();
+    x.beginPath(); x.moveTo(i,512); x.lineTo(i+512,0); x.stroke();
+    x.strokeStyle='rgba(0,0,0,.16)';
+    x.beginPath(); x.moveTo(i+2,0); x.lineTo(i+514,512); x.stroke();
+  }
+  x.fillStyle='#55595d'; x.fillRect(0,0,512,4); x.fillRect(0,256,512,4);
+  x.fillStyle='rgba(255,255,255,.18)'; x.fillRect(0,4,512,2); x.fillRect(0,260,512,2);
+  return c;
+}
+function texBois(base,seed,knots){
+  const c=cv(512,512), x=c.getContext('2d'), R=rng(seed);
+  x.fillStyle=base; x.fillRect(0,0,512,512);
+  for (let i=0;i<150;i++){
+    const y=R()*512, a=.04+R()*.08, amp=2+R()*6, ph=R()*6;
+    x.strokeStyle=`rgba(120,80,40,${a.toFixed(3)})`; x.lineWidth=.6+R()*2.2;
+    x.beginPath(); for (let px=0;px<=512;px+=16){ const yy=y+Math.sin(px/90+ph)*amp; px?x.lineTo(px,yy):x.moveTo(px,yy); } x.stroke();
+  }
+  for (let k=0;k<knots;k++){ const px=R()*512, py=R()*512; x.fillStyle='rgba(120,75,35,.25)'; x.beginPath(); x.ellipse(px,py,9+R()*6,4+R()*3,0,0,7); x.fill(); }
+  return c;
+}
+function texCarreaux(){
+  const c=cv(512,512), x=c.getContext('2d'), R=rng(21);
+  x.fillStyle='#d8d8d4'; x.fillRect(0,0,512,512);
+  for (let i=0;i<2;i++) for (let j=0;j<2;j++){
+    const sh=128+(R()*14|0); x.fillStyle=`rgb(${sh},${sh+3},${sh+6})`; x.fillRect(i*256+3,j*256+3,250,250);
+    for (let k=0;k<5000;k++){ const v=R()<.5?70:210; x.fillStyle=`rgba(${v},${v},${v},.22)`; x.fillRect(i*256+3+R()*248,j*256+3+R()*248,1.6,1.6); }
+  }
+  return c;
+}
+function texGyproc(){
+  const c=cv(512,512), x=c.getContext('2d'), R=rng(31);
+  x.fillStyle='#9dbfa6'; x.fillRect(0,0,512,512);
+  for (let i=0;i<6000;i++){ x.fillStyle=`rgba(255,255,255,${(R()*.06).toFixed(3)})`; x.fillRect(R()*512,R()*512,2,2); }
+  x.fillStyle='rgba(235,238,232,.85)'; x.fillRect(0,0,9,512);     // joint enduit tous les 120 cm
+  return c;
+}
+function texBlocsPeints(){
+  const c=cv(512,256), x=c.getContext('2d'), R=rng(51);
+  x.fillStyle='#efeeea'; x.fillRect(0,0,512,256);
+  for (let i=0;i<14000;i++){ const v=R()<.5?205:255; x.fillStyle=`rgba(${v},${v},${v-3},.25)`; x.fillRect(R()*512,R()*256,1.6,1.6); }
+  x.fillStyle='rgba(170,168,160,.35)';
+  x.fillRect(0,0,512,3); x.fillRect(0,128,512,3);                // joints horizontaux
+  for (const [y,off] of [[0,0],[128,128]]) for (let k=0;k<3;k++){ const px=(k*256+off)%512; x.fillRect(px,y,3,128); }
+  return c;
+}
+function texSac(){
+  const c=cv(512,256), x=c.getContext('2d'), R=rng(61);
+  x.fillStyle='#b8231f'; x.fillRect(0,0,512,256);
+  x.fillStyle='#d9c08f'; x.fillRect(70,40,300,170);                      // fenêtre : granulés visibles
+  for (let i=0;i<5000;i++){ const v=R()<.5?150:210; x.fillStyle=`rgba(${v},${v-30},${v-80},.5)`; x.fillRect(70+R()*296,40+R()*166,3,2); }
+  x.fillStyle='#f2efe8'; x.fillRect(395,60,90,26); x.fillRect(395,110,70,14); // marquage blanc
+  x.fillStyle='rgba(255,255,255,.18)'; x.fillRect(0,0,512,10);
+  return c;
+}
+function texDalleMin(){
+  const c=cv(512,512), x=c.getContext('2d'), R=rng(41);
+  x.fillStyle='#ecebe6'; x.fillRect(0,0,512,512);
+  for (let i=0;i<9000;i++){ const v=150+R()*60; x.fillStyle=`rgba(${v|0},${v|0},${(v-6)|0},.35)`; x.fillRect(R()*512,R()*512,1+R()*2.2,1+R()*1.2); }
+  for (let i=0;i<260;i++){ x.strokeStyle='rgba(150,148,140,.28)'; x.lineWidth=.8; x.beginPath(); const px=R()*512, py=R()*512; x.moveTo(px,py); x.lineTo(px+(R()-.5)*22,py+(R()-.5)*22); x.stroke(); }
+  return c;
+}
+function texPorteGarage(){
+  const c=cv(512,256), x=c.getContext('2d');
+  x.fillStyle='#ebe9e3'; x.fillRect(0,0,512,256);
+  x.fillStyle='#b8b6af'; x.fillRect(0,0,512,7);
+  x.fillStyle='rgba(255,255,255,.7)'; x.fillRect(0,7,512,3);
+  x.fillStyle='rgba(0,0,0,.035)'; for (let i=0;i<512;i+=8) x.fillRect(i,10,1,246);
+  return c;
+}
+
+/* ---------------- Mathématiques ---------------- */
+const V = {
+  sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+  dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l];},
+};
+const M4 = {
+  persp(f,a,n,far){ const t=1/Math.tan(f/2); return [t/a,0,0,0, 0,t,0,0, 0,0,(far+n)/(n-far),-1, 0,0,2*far*n/(n-far),0]; },
+  ortho(l,r,b,t,n,f){ return [2/(r-l),0,0,0, 0,2/(t-b),0,0, 0,0,-2/(f-n),0, -(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1]; },
+  look(e,c,u){ const z=V.norm(V.sub(e,c)), x=V.norm(V.cross(u,z)), y=V.cross(z,x);
+    return [x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0, -V.dot(x,e),-V.dot(y,e),-V.dot(z,e),1]; },
+  mul(a,b){ const o=new Array(16); for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s;} return o; },
+};
+
+/* ---------------- WebGL ---------------- */
+const glc = document.getElementById('gl'), ovc = document.getElementById('ov'), ov = ovc.getContext('2d');
+const gl = glc.getContext('webgl',{antialias:true}) || glc.getContext('experimental-webgl');
+if (!gl){ document.getElementById('hint').textContent = "Votre navigateur n'affiche pas la 3D (WebGL indisponible)."; throw new Error('WebGL'); }
+const VS = `attribute vec3 aP;attribute vec3 aN;attribute vec2 aU;uniform mat4 uVP;varying vec3 vN;varying vec2 vU;varying float vY;
+void main(){vN=aN;vU=aU;vY=aP.y;gl_Position=uVP*vec4(aP,1.0);}`;
+const FS = `precision mediump float;varying vec3 vN;varying vec2 vU;varying float vY;
+uniform sampler2D uT;uniform vec3 uC;uniform float uTex;uniform float uEmit;uniform float uA;uniform float uK;
+void main(){
+  vec3 b = uTex>0.5 ? texture2D(uT,vU).rgb : uC;
+  if(uEmit>0.5){gl_FragColor=vec4(b,1.0);return;}
+  vec3 n=normalize(vN);
+  float d=max(dot(n,normalize(vec3(0.35,0.85,0.45))),0.0)*0.50+max(dot(n,normalize(vec3(-0.55,0.35,-0.6))),0.0)*0.26;
+  vec3 amb=mix(vec3(0.56,0.55,0.54),vec3(0.64,0.65,0.67),0.5+0.5*n.y);
+  float ao=mix(1.0,0.80+0.20*smoothstep(0.0,70.0,vY),1.0-abs(n.y));
+  gl_FragColor=vec4(min(b*(amb+d)*ao*uK,vec3(1.0)),uA);
+}`;
+function sh(t,s){ const o=gl.createShader(t); gl.shaderSource(o,s); gl.compileShader(o); if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o)); return o; }
+const prog = gl.createProgram(); gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS)); gl.linkProgram(prog); gl.useProgram(prog);
+const A = { p:gl.getAttribLocation(prog,'aP'), n:gl.getAttribLocation(prog,'aN'), u:gl.getAttribLocation(prog,'aU') };
+const U = { vp:gl.getUniformLocation(prog,'uVP'), c:gl.getUniformLocation(prog,'uC'), tex:gl.getUniformLocation(prog,'uTex'), emit:gl.getUniformLocation(prog,'uEmit'), a:gl.getUniformLocation(prog,'uA'), k:gl.getUniformLocation(prog,'uK'), t:gl.getUniformLocation(prog,'uT') };
+const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+const TEX = {};
+for (const [k,f] of Object.entries({ blocs:texBlocs, beton:texBeton, plafond:texPlafond, ply:()=>texBois('#d8b787',3,3), pin:()=>texBois('#dcbb85',5,2), pg:texPorteGarage, carreaux:texCarreaux, gyproc:texGyproc, dalleMin:texDalleMin, blocsPeints:texBlocsPeints, sac:texSac })){
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,f());
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
+  if (aniso) gl.texParameterf(gl.TEXTURE_2D,aniso.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+  TEX[k]=t;
+}
+let BATCH = [];
+function upload(b){
+  for (const x of BATCH) gl.deleteBuffer(x.buf);
+  BATCH = Object.entries(b).map(([m,arr])=>{ const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.STATIC_DRAW); return {m,buf,n:arr.length/8}; });
+}
+
+/* ---------------- État et caméra ---------------- */
+const S = {
+  mode:'orbit',
+  orbit:{ t:[495,40,466], yaw:-0.42, pitch:0.86, dist:1700 },
+  plan:{ x:495, z:466, scale:0.5 },
+  visite:{ x:154, z:880, yaw:0, pitch:-0.05 },
+  opts:{ plafond:false, mursBas:false, cotes:true, etiq:true, plaques:true, vmc:true, fauxPlafond:true, chaufferie:'pac' },
+  measure:{ on:false, pts:[] },
+  W:1, H:1, dpr:1, vp:null,
+};
+const ROOM_VIEWS = {
+  garage:{ x:154, z:740, yaw:0 },
+  cave2: { x:493, z:890, yaw:0 },
+  cave1: { x:833, z:40,  yaw:Math.PI },
+};
+
+function camera(){
+  const a = S.W/S.H;
+  if (S.mode==='plan'){
+    const p=S.plan, hw=S.W/2/p.scale, hh=S.H/2/p.scale;
+    const view = M4.look([p.x,3000,p.z],[p.x,0,p.z],[0,0,-1]);
+    return M4.mul(M4.ortho(-hw,hw,-hh,hh,10,6000),view);
+  }
+  if (S.mode==='visite'){
+    const v=S.visite, e=[v.x,160,v.z], f=[-Math.sin(v.yaw)*Math.cos(v.pitch),Math.sin(v.pitch),-Math.cos(v.yaw)*Math.cos(v.pitch)];
+    return M4.mul(M4.persp(68*Math.PI/180,a,10,20000),M4.look(e,[e[0]+f[0],e[1]+f[1],e[2]+f[2]],[0,1,0]));
+  }
+  const o=S.orbit, cp=Math.cos(o.pitch);
+  const e=[o.t[0]+o.dist*cp*Math.sin(o.yaw), o.t[1]+o.dist*Math.sin(o.pitch), o.t[2]+o.dist*cp*Math.cos(o.yaw)];
+  return M4.mul(M4.persp(42*Math.PI/180,a,10,40000),M4.look(e,o.t,[0,1,0]));
+}
+
+function project(p){
+  const m=S.vp, x=p[0],y=p[1],z=p[2];
+  const cx=m[0]*x+m[4]*y+m[8]*z+m[12], cy=m[1]*x+m[5]*y+m[9]*z+m[13], cw=m[3]*x+m[7]*y+m[11]*z+m[15];
+  if (cw <= 0.01) return null;
+  return [(cx/cw*.5+.5)*S.W, (1-(cy/cw*.5+.5))*S.H];
+}
+
+/* ---------------- Rendu ---------------- */
+let dirty = true;
+function draw(){
+  S.vp = camera();
+  gl.viewport(0,0,glc.width,glc.height);
+  gl.clearColor(0.902,0.906,0.886,1); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+  gl.uniformMatrix4fv(U.vp,false,new Float32Array(S.vp));
+  gl.uniform1i(U.t,0); gl.activeTexture(gl.TEXTURE0);
+  const ordre = [...BATCH.filter(b=>!MATS[b.m].alpha), ...BATCH.filter(b=>MATS[b.m].alpha)];
+  for (const b of ordre){
+    const m = MATS[b.m];
+    if (m.alpha){ gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); }
+    gl.uniform1f(U.a, m.alpha || 1); gl.uniform1f(U.k, m.k || 1);
+    gl.bindBuffer(gl.ARRAY_BUFFER,b.buf);
+    gl.enableVertexAttribArray(A.p); gl.vertexAttribPointer(A.p,3,gl.FLOAT,false,32,0);
+    gl.enableVertexAttribArray(A.n); gl.vertexAttribPointer(A.n,3,gl.FLOAT,false,32,12);
+    gl.enableVertexAttribArray(A.u); gl.vertexAttribPointer(A.u,2,gl.FLOAT,false,32,24);
+    gl.uniform1f(U.tex, m.tex?1:0); gl.uniform1f(U.emit, m.emit?1:0);
+    gl.uniform3fv(U.c, m.color||[1,1,1]);
+    if (m.tex) gl.bindTexture(gl.TEXTURE_2D,TEX[m.tex]);
+    gl.drawArrays(gl.TRIANGLES,0,b.n);
+  }
+  gl.disable(gl.BLEND); gl.depthMask(true);
+  drawOverlay();
+}
+
+const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function drawOverlay(){
+  const c=ov, ink=CSSV('--ink'), accent=CSSV('--accent');
+  c.setTransform(S.dpr,0,0,S.dpr,0,0); c.clearRect(0,0,S.W,S.H);
+  // cotes (vue en plan)
+  if (S.mode==='plan' && S.opts.cotes){
+    c.font = `500 12px ${CSSV('--font-mono')}`; c.textAlign='center'; c.textBaseline='middle';
+    for (const [ax,f,a,b,txt] of DIMS){
+      const p1 = project(ax==='x'?[a,0,f]:[f,0,a]), p2 = project(ax==='x'?[b,0,f]:[f,0,b]);
+      if (!p1||!p2) continue;
+      c.strokeStyle=ink; c.lineWidth=1;
+      c.beginPath(); c.moveTo(p1[0],p1[1]); c.lineTo(p2[0],p2[1]); c.stroke();
+      for (const p of [p1,p2]){ c.beginPath(); c.moveTo(p[0]-4,p[1]+4); c.lineTo(p[0]+4,p[1]-4); c.stroke(); }
+      const mx=(p1[0]+p2[0])/2, my=(p1[1]+p2[1])/2;
+      c.save(); c.translate(mx,my); if (ax==='z') c.rotate(-Math.PI/2);
+      const w=c.measureText(txt).width+8; c.fillStyle=CSSV('--paper'); c.fillRect(-w/2,-8,w,16);
+      c.fillStyle=ink; c.fillText(txt,0,0.5); c.restore();
+    }
+  }
+  if (S.opts.etiq){
+    // pièces
+    const ici = S.mode==='visite' ? roomOf(S.visite.x,S.visite.z) : null;
+    for (const r of MODEL.rooms){
+      if (ici && r!==ici) continue;
+      const p = project([r.etiquette[0], 2, r.etiquette[1]]);
+      if (!p || p[0]<-60 || p[0]>S.W+60 || p[1]<-30 || p[1]>S.H+30) continue;
+      c.textAlign='center'; c.textBaseline='alphabetic';
+      c.font=`600 15px ${CSSV('--font-display')}`;
+      const wn = c.measureText(r.nom).width; c.font=`400 11.5px ${CSSV('--font-mono')}`;
+      const w = Math.max(wn, c.measureText(r.surface).width, 40) + 22; c.font=`600 15px ${CSSV('--font-display')}`;
+      c.fillStyle='rgba(28,32,35,.84)'; roundRect(c,p[0]-w/2,p[1]-20,w,38,7); c.fill();
+      c.fillStyle='#fff'; c.fillText(r.nom,p[0],p[1]-2);
+      c.font=`400 11.5px ${CSSV('--font-mono')}`; c.fillStyle='#d6d8d4'; c.fillText(r.surface,p[0],p[1]+12);
+    }
+    // équipements
+    c.font=`500 11.5px ${CSSV('--font-body')}`; c.textAlign='left'; c.textBaseline='middle';
+    for (const it of ITEM_LABELS){
+      if (it.si && it.si !== S.opts.chaufferie) continue;
+      if (ici && roomOf(it.p[0],it.p[2])!==ici) continue;
+      const enPlan = S.mode==='plan';
+      if (enPlan && it.noPlan) continue;
+      const p = project(enPlan ? (it.plan || [it.p[0],0,it.p[2]]) : it.p);
+      if (!p || p[0]<-100 || p[0]>S.W+20 || p[1]<-20 || p[1]>S.H+20) continue;
+      const special = false, w=c.measureText(it.t).width+10;
+      const x0 = (enPlan && it.gauche) ? p[0]-6-w : p[0]+6;
+      c.fillStyle = special ? accent : ink;
+      c.beginPath(); c.arc(p[0],p[1],3,0,7); c.fill();
+      c.fillStyle='rgba(249,249,246,.92)'; roundRect(c,x0,p[1]-9,w,18,4); c.fill();
+      c.fillStyle = special ? accent : ink; c.fillText(it.t,x0+5,p[1]+.5);
+    }
+  }
+  // mesure
+  if (S.mode==='plan' && S.measure.pts.length){
+    const pts = S.measure.pts.map(q=>project([q[0],0,q[1]]));
+    c.strokeStyle=accent; c.fillStyle=accent; c.lineWidth=2;
+    if (pts.length===2){ c.beginPath(); c.moveTo(pts[0][0],pts[0][1]); c.lineTo(pts[1][0],pts[1][1]); c.stroke(); }
+    for (const p of pts){ c.beginPath(); c.arc(p[0],p[1],4,0,7); c.fill(); }
+    if (pts.length===2){
+      const [a,b]=S.measure.pts, d=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      const txt=(d/100).toFixed(2).replace('.',',')+' m';
+      c.font=`600 13px ${CSSV('--font-mono')}`; c.textAlign='center'; c.textBaseline='middle';
+      const mx=(pts[0][0]+pts[1][0])/2, my=(pts[0][1]+pts[1][1])/2, w=c.measureText(txt).width+14;
+      c.fillStyle=accent; roundRect(c,mx-w/2,my-22,w,22,5); c.fill(); c.fillStyle='#fff'; c.fillText(txt,mx,my-10.5);
+    }
+  }
+}
+function roomOf(x,z){ return MODEL.rooms.find(r=>x>=r.x0-12&&x<=r.x1+12&&z>=r.z0-12&&z<=r.z1+12) || null; }
+function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+function resize(){
+  S.dpr = Math.min(window.devicePixelRatio||1,2);
+  S.W = glc.clientWidth; S.H = glc.clientHeight;
+  for (const k of [glc,ovc]){ k.width=Math.round(S.W*S.dpr); k.height=Math.round(S.H*S.dpr); }
+  dirty = true;
+}
+window.addEventListener('resize',resize);
+
+/* ---------------- Vues ---------------- */
+function panelOffset(){ return S.W > 900 ? 160 : 0; }
+function fitPlan(){
+  const narrow = S.W <= 640, top = narrow ? S.H*0.42 : 0;
+  const avW = S.W - (S.W>900?320:40), avH = S.H - top - 60;
+  S.plan.scale = Math.min(avW/1260, avH/1220);
+  S.plan.x = 495 - panelOffset()/S.plan.scale;
+  S.plan.z = 466 - (top/2)/S.plan.scale;
+}
+function fitOrbit(room){
+  const o=S.orbit, a=S.W/S.H;
+  if (!room || room==='all'){ o.t=[495,40,466]; o.dist = 1700*Math.max(1,1.35/a); o.yaw=-0.42; o.pitch=0.86; }
+  else { const r=MODEL.rooms.find(x=>x.id===room); o.t=[(r.x0+r.x1)/2,40,(r.z0+r.z1)/2]; o.dist=1250*Math.max(1,1.1/a); }
+  if (S.W>900){ // décale la maquette à droite du panneau
+    const sh = 150/S.W*o.dist*0.75; o.t=[o.t[0]-Math.cos(o.yaw)*sh,o.t[1],o.t[2]+Math.sin(o.yaw)*sh];
+  }
+}
+function setMode(m){
+  S.mode=m;
+  for (const b of document.querySelectorAll('#modes button')) b.setAttribute('aria-pressed', String(b.dataset.mode===m));
+  document.getElementById('pad').classList.toggle('on', m==='visite');
+  document.getElementById('measure').hidden = m!=='plan';
+  document.getElementById('rooms-label').textContent = m==='visite' ? 'Se placer dans' : 'Cadrer sur';
+  document.querySelector('#rooms [data-room="all"]').hidden = m==='visite';
+  if (m!=='plan'){ S.measure.on=false; syncMeasure(); }
+  if (m==='plan') fitPlan();
+  if (m==='visite'){
+    if (S.opts.mursBas){ S.opts.mursBas=false; document.getElementById('t-murs').checked=false; }
+    if (!S.opts.plafond){ S.opts.plafond=true; document.getElementById('t-plafond').checked=true; }
+  }
+  rebuild(); hint(); dirty=true;
+}
+function hint(){
+  const t = {
+    orbit:'Glisser : tourner · Clic droit ou Maj + glisser : déplacer · Molette ou pincer : zoomer',
+    plan:'Glisser : déplacer · Molette ou pincer : zoomer',
+    visite:'Glisser : regarder autour · Flèches, ZQSD ou boutons : marcher',
+  }[S.mode];
+  document.getElementById('hint').textContent = S.measure.on ? 'Cliquez deux points sur le plan pour mesurer · Échap pour arrêter' : t;
+}
+function rebuild(){ upload(buildScene({...S.opts, enPlan:S.mode==='plan'})); dirty=true; }
+
+document.getElementById('modes').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) setMode(b.dataset.mode); });
+document.getElementById('rooms').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return; const id=b.dataset.room;
+  if (S.mode==='orbit') fitOrbit(id);
+  else if (S.mode==='plan'){ if(id==='all') fitPlan(); else { const r=MODEL.rooms.find(x=>x.id===id); S.plan.x=(r.x0+r.x1)/2-panelOffset()/S.plan.scale; S.plan.z=(r.z0+r.z1)/2; S.plan.scale=Math.min((S.W-(S.W>900?320:40))/500,(S.H-60)/1000); S.plan.x=(r.x0+r.x1)/2-panelOffset()/S.plan.scale; } }
+  else if (ROOM_VIEWS[id]) Object.assign(S.visite, ROOM_VIEWS[id], {pitch:-0.05});
+  dirty=true;
+});
+for (const [id,key,rb] of [['t-plafond','plafond',1],['t-murs','mursBas',1],['t-cotes','cotes',0],['t-etiq','etiq',0],['t-plaques','plaques',1],['t-vmc','vmc',1],['t-fp','fauxPlafond',1]]){
+  const el=document.getElementById(id); el.checked=S.opts[key];
+  el.addEventListener('change',()=>{ S.opts[key]=el.checked; if(rb) rebuild(); document.getElementById('legend').hidden=!S.opts.vmc; dirty=true; });
+}
+document.getElementById('chauff').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  S.opts.chaufferie=b.dataset.v;
+  for (const x of document.querySelectorAll('#chauff button')) x.setAttribute('aria-pressed',String(x===b));
+  rebuild();
+});
+function syncMeasure(){ const b=document.getElementById('measure'); b.setAttribute('aria-pressed',String(S.measure.on)); glc.classList.toggle('measuring',S.measure.on); if(!S.measure.on) S.measure.pts=[]; hint(); dirty=true; }
+document.getElementById('measure').addEventListener('click',()=>{ S.measure.on=!S.measure.on; syncMeasure(); });
+
+/* ---------------- Interactions ---------------- */
+const ptrs = new Map(); let drag=null;
+glc.addEventListener('contextmenu',e=>e.preventDefault());
+glc.addEventListener('pointerdown',e=>{
+  glc.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  drag={x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,btn:e.button,shift:e.shiftKey,moved:0};
+  glc.classList.add('dragging');
+});
+glc.addEventListener('pointermove',e=>{
+  if (!ptrs.has(e.pointerId)) return;
+  const prev = ptrs.get(e.pointerId);
+  if (ptrs.size===2){
+    const [a,b]=[...ptrs.values()], d0=Math.hypot(a.x-b.x,a.y-b.y);
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    const [c,d]=[...ptrs.values()], d1=Math.hypot(c.x-d.x,c.y-d.y);
+    zoom(d0/d1, (c.x+d.x)/2, (c.y+d.y)/2);
+    pan((e.clientX-prev.x)/2,(e.clientY-prev.y)/2);
+    drag && (drag.moved=99); return;
+  }
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if (!drag) return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag.x=e.clientX; drag.y=e.clientY;
+  drag.moved += Math.abs(dx)+Math.abs(dy);
+  if (S.mode==='orbit'){
+    if (drag.btn===2||drag.shift) pan(dx,dy);
+    else { S.orbit.yaw -= dx*0.006; S.orbit.pitch = Math.min(1.53,Math.max(0.06,S.orbit.pitch+dy*0.005)); }
+  } else if (S.mode==='plan'){ pan(dx,dy); }
+  else { S.visite.yaw += dx*0.004; S.visite.pitch = Math.min(1.1,Math.max(-1.1,S.visite.pitch+dy*0.004)); }
+  dirty=true;
+});
+function endPtr(e){
+  ptrs.delete(e.pointerId);
+  if (drag && ptrs.size===0){
+    if (drag.moved<5 && S.mode==='plan' && S.measure.on){
+      const r=glc.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
+      const w=[Math.round(S.plan.x+(sx-S.W/2)/S.plan.scale), Math.round(S.plan.z+(sy-S.H/2)/S.plan.scale)];
+      if (S.measure.pts.length>=2) S.measure.pts=[];
+      S.measure.pts.push(w); dirty=true;
+    }
+    drag=null; glc.classList.remove('dragging');
+  }
+}
+glc.addEventListener('pointerup',endPtr); glc.addEventListener('pointercancel',endPtr);
+glc.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=glc.getBoundingClientRect(), k=Math.exp(e.deltaY*0.0012);
+  if (S.mode==='visite'){ walk(-e.deltaY*0.6,0); }
+  else zoom(k, e.clientX-r.left, e.clientY-r.top);
+  dirty=true;
+},{passive:false});
+
+function zoom(k,sx,sy){
+  if (S.mode==='orbit') S.orbit.dist = Math.min(6000,Math.max(150,S.orbit.dist*k));
+  else if (S.mode==='plan'){
+    const p=S.plan, wx=p.x+(sx-S.W/2)/p.scale, wz=p.z+(sy-S.H/2)/p.scale;
+    p.scale=Math.min(6,Math.max(0.12,p.scale/k)); p.x=wx-(sx-S.W/2)/p.scale; p.z=wz-(sy-S.H/2)/p.scale;
+  } else walk((1-k)*400,0);
+  dirty=true;
+}
+function pan(dx,dy){
+  if (S.mode==='orbit'){
+    const o=S.orbit, s=o.dist*0.0013, r=[Math.cos(o.yaw),0,-Math.sin(o.yaw)], f=[-Math.sin(o.yaw),0,-Math.cos(o.yaw)];
+    o.t=[o.t[0]-r[0]*dx*s+f[0]*dy*s, o.t[1], o.t[2]-r[2]*dx*s+f[2]*dy*s];
+  } else if (S.mode==='plan'){ S.plan.x-=dx/S.plan.scale; S.plan.z-=dy/S.plan.scale; }
+  dirty=true;
+}
+
+/* marche en visite, avec collisions simples contre les murs */
+function blocked(x,z){
+  const R=18;
+  if (x<R||x>989-R||z<R||z>932-R) return true;
+  for (const w of MODEL.walls){
+    if (x<w.x0-R||x>w.x1+R||z<w.z0-R||z>w.z1+R) continue;
+    const ax=wallAxis(w), s= ax==='x'?x:z;
+    if ((w.openings||[]).some(o=>s>o.from+R*0.6&&s<o.to-R*0.6)) continue;
+    return true;
+  }
+  return false;
+}
+function walk(fwd,side){
+  const v=S.visite, fx=-Math.sin(v.yaw), fz=-Math.cos(v.yaw), rx=Math.cos(v.yaw), rz=-Math.sin(v.yaw);
+  const nx=v.x+fx*fwd+rx*side, nz=v.z+fz*fwd+rz*side;
+  if (!blocked(nx,v.z)) v.x=nx;
+  if (!blocked(v.x,nz)) v.z=nz;
+  dirty=true;
+}
+const keys = new Set();
+const KEYMAP = { ArrowUp:'f', KeyW:'f', KeyZ:'f', ArrowDown:'b', KeyS:'b', ArrowLeft:'tl', ArrowRight:'tr', KeyA:'l', KeyQ:'l', KeyD:'r' };
+window.addEventListener('keydown',e=>{
+  if (e.key==='Escape' && S.measure.on){ S.measure.on=false; syncMeasure(); return; }
+  if (S.mode!=='visite' || e.target.closest('input')) return;
+  const k=KEYMAP[e.code]; if (k){ keys.add(k); e.preventDefault(); }
+});
+window.addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) keys.delete(k); });
+window.addEventListener('blur',()=>keys.clear());
+for (const b of document.querySelectorAll('#pad button')){
+  const k=b.dataset.k;
+  b.addEventListener('pointerdown',e=>{ e.preventDefault(); b.setPointerCapture(e.pointerId); keys.add(k==='l'?'tl':k==='r'?'tr':k); });
+  const up=()=>keys.delete(k==='l'?'tl':k==='r'?'tr':k);
+  b.addEventListener('pointerup',up); b.addEventListener('pointercancel',up);
+}
+
+let last=performance.now();
+function frame(t){
+  const dt=Math.min(0.05,(t-last)/1000); last=t;
+  if (S.mode==='visite' && keys.size){
+    const sp=160*dt;
+    if (keys.has('f')) walk(sp,0);
+    if (keys.has('b')) walk(-sp,0);
+    if (keys.has('l')) walk(0,-sp);
+    if (keys.has('r')) walk(0,sp);
+    if (keys.has('tl')) { S.visite.yaw += 1.6*dt; dirty=true; }
+    if (keys.has('tr')) { S.visite.yaw -= 1.6*dt; dirty=true; }
+  }
+  if (dirty){ dirty=false; draw(); }
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- Démarrage ---------------- */
+resize(); fitOrbit('all'); fitPlan(); rebuild(); hint();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ dirty=true; });
+requestAnimationFrame(frame);
+window.__cave = { S, setMode, fitOrbit, rebuild, draw };
+</script>
+</body>
+</html>
