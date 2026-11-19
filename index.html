@@ -166,7 +166,7 @@ const MODEL = {
     { id:'garage', nom:'Garage', surface:'24 m²', x0:0,   x1:309, z0:0, z1:772, etiquette:[154,300] },
     { id:'local',  nom:'Local technique', surface:'4,6 m²', x0:0, x1:309, z0:782, z1:932, etiquette:[230,850] },
     { id:'cave2',  nom:'Cave 2', surface:'28 m²', x0:329, x1:657, z0:0, z1:932, etiquette:[493,560] },
-    { id:'cave1',  nom:'Cave 1', surface:'27 m² après doublage', x0:677, x1:989, z0:0, z1:932, etiquette:[833,466] },
+    { id:'cave1',  nom:'Cave 1', surface:'27 m² après doublage', x0:677, x1:989, z0:0, z1:932, etiquette:[833,640] },
   ],
   // Murs : rectangles au sol. Ouvertures repérées le long du mur (from/to), h = hauteur de passage.
   // porte : 'baie' (baie vitrée coulissante), 'porte' (porte pleine), 'panneau' (contreplaqué), absent = passage libre
@@ -209,6 +209,7 @@ const MODEL = {
   },
   // Peinture blanche des murs de la cave 1 : plaques du doublage + mur côté cave 2 (parpaings peints)
   peintureCave1: true,
+  surprise: true,                                     // bonhomme en caleçon à cœurs dans la cave 1
   // Faux plafond suspendu cave 1 : ossature T24, dalles 60×60, calepinage centré, entre les faces du doublage
   fauxPlafond: { hauteur:220, x0:677, x1:975.75, z0:13.25, z1:918.75, module:60,
                  panneauxLED: [[796.4,256],[796.4,496],[796.4,736]] },
@@ -258,6 +259,11 @@ const MATS = {
   cuve:    { color:[0.24,0.45,0.70] },
   blancNacre:{ color:[0.95,0.95,0.93], k:1.05 },
   noir:    { color:[0.11,0.11,0.12] },
+  peau:    { color:[0.97,0.80,0.62] },
+  cheveux: { color:[0.36,0.22,0.12] },
+  joues:   { color:[0.95,0.55,0.60] },
+  calecon: { tex:'calecon', tile:[20,20] },
+  pancarte:{ tex:'pancarte', tile:[80,40], k:1.1 },
   sac:     { tex:'sac', tile:[58,23] },
   cuivre:  { color:[0.78,0.45,0.25] },
   alu:     { color:[0.23,0.25,0.27] },
@@ -520,6 +526,7 @@ function buildScene(opts){
     g.cyl('y',[9,130,457],2.6,16,'pvc',10);
   }
   rangementCave2(g);
+  if (MODEL.surprise) bonhomme(g);
 
   if (opts.chaufferie === 'cuve'){
     // cuve à mazout 1200 L, acier ovale debout, d'après la photo :
@@ -567,6 +574,26 @@ function rangementCave2(g){
       g.box(x0+i*40+1+jx,x0+i*40+39+jx,y,y+11,z0+j*60+1+jz,z0+j*60+59+jz,'sac');
     }
   }
+}
+
+// Surprise : bonhomme en blocs en caleçon à cœurs, avec une pancarte, dans la cave 1 (tourné vers le fond)
+function bonhomme(g){
+  const x=833, z=300;
+  g.box(x-17,x-2,0,62,z-8,z+8,'peau'); g.box(x+2,x+17,0,62,z-8,z+8,'peau');          // jambes
+  g.box(x-21,x+21,62,95,z-10,z+10,'calecon');                                        // caleçon à cœurs
+  g.box(x-21,x+21,95,140,z-9,z+9,'peau');                                            // torse
+  g.box(x-6,x+6,140,146,z-6,z+6,'peau');                                             // cou
+  g.box(x-16,x+16,146,178,z-16,z+16,'peau');                                         // tête
+  g.box(x-17,x+17,176,184,z-17,z+17,'cheveux'); g.box(x-17,x+17,160,184,z+12,z+17,'cheveux');
+  for (const ex of [-9,5]) g.box(x+ex,x+ex+4,165,170,z-16.6,z-16,'sombre');            // yeux
+  g.box(x-7,x+7,153,155.5,z-16.6,z-16,'sombre');                                     // sourire
+  g.box(x-9,x-6,155,158,z-16.6,z-16,'sombre'); g.box(x+6,x+9,155,158,z-16.6,z-16,'sombre');
+  for (const ex of [-14,10]) g.box(x+ex,x+ex+4,156,160,z-16.5,z-16,'joues');         // joues
+  g.box(x-31,x-21,85,140,z-5,z+5,'peau');                                             // bras gauche le long du corps
+  g.box(x+21,x+87,128,140,z-5,z+5,'peau');                                            // bras droit tendu
+  g.box(x+83,x+91,70,165,z-3,z+3,'bois');                                             // manche de la pancarte
+  g.box(880,960,160,200,z-2,z+1,'blanc');                                       // pancarte
+  g.box(880,960,160,200,z-2.4,z-2.1,'pancarte');   // texte calé sur la pancarte (80 × 40 cm)
 }
 
 // PAC (unité intérieure murale) + ballon Viessmann Vitocell 100-V 300 L dans le coin du garage
@@ -791,6 +818,26 @@ function texSac(){
   x.fillStyle='rgba(255,255,255,.18)'; x.fillRect(0,0,512,10);
   return c;
 }
+function coeur(x,cx,cy,r){ x.beginPath(); x.moveTo(cx,cy+r*0.9); x.bezierCurveTo(cx-r*1.6,cy-r*0.2,cx-r*0.7,cy-r*1.3,cx,cy-r*0.45); x.bezierCurveTo(cx+r*0.7,cy-r*1.3,cx+r*1.6,cy-r*0.2,cx,cy+r*0.9); x.fill(); }
+function texCalecon(){
+  const c=cv(256,256), x=c.getContext('2d');
+  x.fillStyle='#fbfaf6'; x.fillRect(0,0,256,256);
+  x.translate(0,256); x.scale(1,-1);                   // la texture s'affiche à l'envers sur les faces : on compense
+  x.fillStyle='#d42a3a';
+  for (const [cx,cy] of [[64,64],[192,64],[0,192],[128,192],[256,192],[64,320],[192,-64]]) coeur(x,cx,cy,30);
+  return c;
+}
+function texPancarte(){
+  const c=cv(512,256), x=c.getContext('2d');
+  x.fillStyle='#ffffff'; x.fillRect(0,0,512,256);
+  x.translate(512,256); x.rotate(Math.PI);             // vue depuis le fond de la cave : texte retourné
+  x.fillStyle='#d42a3a'; x.textAlign='center'; x.textBaseline='middle';
+  x.font='bold 112px "Comic Sans MS","Chalkboard SE","Segoe Print",sans-serif';
+  x.fillText("Je t'aime",256,118);
+  coeur(x,256,212,26);
+  x.strokeStyle='#d42a3a'; x.lineWidth=8; x.strokeRect(14,14,484,228);
+  return c;
+}
 function texDalleMin(){
   const c=cv(512,512), x=c.getContext('2d'), R=rng(41);
   x.fillStyle='#ecebe6'; x.fillRect(0,0,512,512);
@@ -845,7 +892,7 @@ const A = { p:gl.getAttribLocation(prog,'aP'), n:gl.getAttribLocation(prog,'aN')
 const U = { vp:gl.getUniformLocation(prog,'uVP'), c:gl.getUniformLocation(prog,'uC'), tex:gl.getUniformLocation(prog,'uTex'), emit:gl.getUniformLocation(prog,'uEmit'), a:gl.getUniformLocation(prog,'uA'), k:gl.getUniformLocation(prog,'uK'), t:gl.getUniformLocation(prog,'uT') };
 const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
 const TEX = {};
-for (const [k,f] of Object.entries({ blocs:texBlocs, beton:texBeton, plafond:texPlafond, ply:()=>texBois('#d8b787',3,3), pin:()=>texBois('#dcbb85',5,2), pg:texPorteGarage, carreaux:texCarreaux, gyproc:texGyproc, dalleMin:texDalleMin, blocsPeints:texBlocsPeints, sac:texSac })){
+for (const [k,f] of Object.entries({ blocs:texBlocs, beton:texBeton, plafond:texPlafond, ply:()=>texBois('#d8b787',3,3), pin:()=>texBois('#dcbb85',5,2), pg:texPorteGarage, carreaux:texCarreaux, gyproc:texGyproc, dalleMin:texDalleMin, blocsPeints:texBlocsPeints, sac:texSac, calecon:texCalecon, pancarte:texPancarte })){
   const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,f());
   gl.generateMipmap(gl.TEXTURE_2D);
