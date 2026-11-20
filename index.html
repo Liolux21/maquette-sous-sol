@@ -317,8 +317,8 @@ const ITEM_LABELS = [
   { t:'Adoucisseur', p:[428,60,218], gauche:true },
   { t:'Pompe à eau', p:[16,170,490] },
   { t:'Cuve à mazout 1200 L', p:[95,178,880], si:'cuve' },
-  { t:'Bureau d\'angle', p:[945,80,700] },
-  { t:'Fauteuil', p:[903,96,836] },
+  { t:'Bureau d\'angle', p:[845,80,760] },
+  { t:'Fauteuil', p:[934,96,836] },
   { t:'Télévision 55"', p:[686,176,836] },
   { t:'Meuble TV', p:[718,58,880] },
   { t:'Coffre de toit sur support bois', p:[379,236,815] },
@@ -590,18 +590,19 @@ function rangementCave2(g){
 
 // Bureau dans la nouvelle pièce de la cave 1 (x 677 → 975,75, z 650 → 918,75 ; porte en haut à gauche)
 function bureau(g){
-  // bureau d'angle 160 × 140 cm, prof. 60, plateau chêne, piétement métal noir — angle cloison / mur de droite
+  // bureau d'angle 160 × 140 cm, prof. 60, plateau chêne, piétement métal noir :
+  // plateau principal le long de la cloison, retour vers la pièce côté porte (tourné de 90° vers la gauche)
   const yT = 74;
-  g.box(815,975.75,yT-2.5,yT,650,710,'chene');                      // retour le long de la cloison
-  g.box(915.75,975.75,yT-2.5,yT,710,790,'chene');                   // retour le long du mur de droite
-  for (const [x,z] of [[817,652],[817,703],[969,652],[918,783],[969,783]]) g.box(x,x+5,0,yT-2.5,z,z+5,'noir');
+  g.box(815,975.75,yT-2.5,yT,650,710,'chene');                      // plateau le long de la cloison
+  g.box(815,875,yT-2.5,yT,710,790,'chene');                         // retour vers l'intérieur de la pièce
+  for (const [x,z] of [[817,652],[969,652],[969,703],[817,783],[868,783]]) g.box(x,x+5,0,yT-2.5,z,z+5,'noir');
   g.box(817,969,yT-10,yT-2.5,652,655,'noir');                       // ceinture arrière
   // écran, clavier, souris
-  g.box(882,898,yT,yT+1,664,676,'noir'); g.box(888,892,yT+1,yT+14,668,672,'noir');
-  g.box(860,920,yT+12,yT+46,664,667,'noir'); g.box(862,918,yT+14,yT+44,667,667.4,'ecran');
-  g.box(868,912,yT,yT+1.5,686,700,'gris'); g.box(922,928,yT,yT+2,688,698,'gris');
-  // fauteuil de bureau, tourné vers l'écran
-  const cx=890, cz=752;
+  g.box(912,928,yT,yT+1,664,676,'noir'); g.box(918,922,yT+1,yT+14,668,672,'noir');
+  g.box(890,950,yT+12,yT+46,664,667,'noir'); g.box(892,948,yT+14,yT+44,667,667.4,'ecran');
+  g.box(898,942,yT,yT+1.5,686,700,'gris'); g.box(952,958,yT,yT+2,688,698,'gris');
+  // fauteuil de bureau, dans l'angle intérieur, tourné vers l'écran
+  const cx=920, cz=748;
   g.box(cx-28,cx+28,3,7,cz-2,cz+2,'noir'); g.box(cx-2,cx+2,3,7,cz-28,cz+28,'noir');   // piétement en croix
   for (const [dx,dz] of [[-27,0],[27,0],[0,-27],[0,27]]) g.cyl('y',[cx+dx,0,cz+dz],2.5,3,'gris',8);
   g.cyl('y',[cx,7,cz],3,37,'metal',10);
@@ -610,7 +611,7 @@ function bureau(g){
   g.box(cx-2,cx+2,48,58,cz+20,cz+26,'noir');
   for (const dx of [-27,23]) g.box(cx+dx,cx+dx+4,52,66,cz-14,cz+12,'noir');          // accoudoirs
   // fauteuil de salon cuir cognac, tourné vers la télévision
-  const fx0=862, fx1=945, fz0=795, fz1=878;
+  const fx0=892.75, fx1=975.75, fz0=795, fz1=878;                 // dos contre le mur de droite
   for (const [x,z] of [[fx0+4,fz0+4],[fx0+4,fz1-8],[fx1-8,fz0+4],[fx1-8,fz1-8]]) g.box(x,x+4,0,10,z,z+4,'bois');
   g.box(fx0,fx1,10,40,fz0,fz1,'cognac');                             // caisse
   g.box(fx0+2,fx1-20,40,49,fz0+15,fz1-15,'cognac');                 // coussin d'assise
