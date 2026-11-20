@@ -163,7 +163,7 @@ const MODEL = {
   hauteur: 240,          // hauteur sous plafond (12 rangs de parpaings de 20 cm)
   dalle: 20,             // épaisseur du plafond
   rooms: [
-    { id:'garage', nom:'Garage', surface:'24 m²', x0:0,   x1:309, z0:0, z1:772, etiquette:[154,250] },
+    { id:'garage', nom:'Atelier d\'art', surface:'24 m²', x0:0,   x1:309, z0:0, z1:772, etiquette:[154,250] },
     { id:'local',  nom:'Local technique', surface:'4,6 m²', x0:0, x1:309, z0:782, z1:932, etiquette:[230,850] },
     { id:'cave2',  nom:'Cave 2', surface:'28 m²', x0:329, x1:657, z0:0, z1:932, etiquette:[493,560] },
     { id:'cave1',  nom:'Salle de sport', surface:'18,7 m²', x0:677, x1:989, z0:0, z1:640, etiquette:[833,560] },
@@ -213,7 +213,7 @@ const MODEL = {
   },
   // Peinture blanche des murs de la cave 1 : plaques du doublage + mur côté cave 2 (parpaings peints)
   peintureCave1: true,
-  surprise: true,                                     // bonhomme en caleçon à cœurs au milieu du garage
+  surprise: false,                                    // bonhomme en caleçon à cœurs (retiré)
   // Faux plafond suspendu cave 1 : ossature T24, dalles 60×60, calepinage centré, entre les faces du doublage
   fauxPlafond: { hauteur:220, x0:677, x1:975.75, z0:13.25, z1:918.75, module:60,
                  panneauxLED: [[796.4,256],[796.4,496],[796.4,736]] },
@@ -267,6 +267,24 @@ const MATS = {
   cognac:  { color:[0.56,0.31,0.17] },
   ecran:   { color:[0.06,0.08,0.11] },
   dalleSport:{ tex:'dalleSport', tile:[100,100] },
+  parquet: { tex:'parquet', tile:[120,120] },
+  tapis:   { tex:'tapis', tile:[65,70] },
+  peintureBureau:{ color:[0.85,0.91,0.87], k:1.06 },
+  peintureFond:{ color:[0.87,0.92,0.95], k:1.06 },
+  blocsSauge:{ tex:'blocsSauge', tile:[100,40], k:1.06 },
+  artA:    { tex:'artA', tile:[44,60] }, artB:{ tex:'artB', tile:[50,44] },
+  artC:    { tex:'artC', tile:[90,70] }, artD:{ tex:'artD', tile:[60,50] },
+  toile:   { tex:'toile', tile:[60,80] },
+  muralSport:{ tex:'muralSport', tile:[240,60] },
+  pegboard:{ tex:'pegboard', tile:[60,60] },
+  bache:   { tex:'bache', tile:[120,120] },
+  potTerre:{ color:[0.72,0.40,0.26] }, feuillage:{ color:[0.22,0.48,0.25] }, feuillage2:{ color:[0.30,0.56,0.28] },
+  livre1:{ color:[0.62,0.18,0.16] }, livre2:{ color:[0.15,0.30,0.50] }, livre3:{ color:[0.85,0.72,0.35] }, livre4:{ color:[0.25,0.45,0.35] },
+  serviette1:{ color:[0.18,0.52,0.55] }, serviette2:{ color:[0.75,0.76,0.78] },
+  peinture1:{ color:[0.85,0.20,0.20] }, peinture2:{ color:[0.20,0.45,0.80] }, peinture3:{ color:[0.95,0.80,0.20] },
+  peinture4:{ color:[0.25,0.65,0.35] }, peinture5:{ color:[0.60,0.30,0.70] },
+  palette: { color:[0.80,0.65,0.45] },
+  boite1:{ color:[0.85,0.55,0.55] }, boite2:{ color:[0.55,0.72,0.85] }, boite3:{ color:[0.92,0.85,0.55] },
   tapisYoga:{ color:[0.18,0.52,0.55] },
   miroir:  { color:[0.80,0.86,0.90], k:1.15 },
   peau:    { color:[0.97,0.80,0.62] },
@@ -320,6 +338,10 @@ const ITEM_LABELS = [
   { t:'Adoucisseur', p:[428,60,218], gauche:true },
   { t:'Pompe à eau', p:[16,170,490] },
   { t:'Cuve à mazout 1200 L', p:[95,178,880], si:'cuve' },
+  { t:'Chevalet', p:[255,192,150] },
+  { t:'Table de travail', p:[155,95,420] },
+  { t:'Rangements', p:[20,206,650] },
+  { t:'Panneau perforé', p:[305,196,360], gauche:true },
   { t:'Tapis de course', p:[925,140,130] },
   { t:'Rameur', p:[718,70,150] },
   { t:'Banc de musculation', p:[815,52,390] },
@@ -546,8 +568,9 @@ function buildScene(opts){
   }
   rangementCave2(g);
   if (MODEL.surprise) bonhomme(g);
-  bureau(g);
-  salleDeSport(g);
+  bureau(g); decoBureau(g,Hc);
+  salleDeSport(g); decoSport(g);
+  atelier(g);
 
   if (opts.chaufferie === 'cuve'){
     // cuve à mazout 1200 L, acier ovale debout, d'après la photo :
@@ -674,6 +697,98 @@ function salleDeSport(g){
   // tapis de sol et miroir mural
   g.box(860,920,1,1.6,290,470,'tapisYoga');
   g.box(973.75,975.6,25,205,275,525,'noir'); g.box(973.4,973.75,28,202,278,522,'miroir');
+}
+
+// Plante en pot (pot en terre cuite, feuillage en volumes)
+function plante(g,x,z,h=1){
+  g.cyl('y',[x,0,z],12*h,30*h,'potTerre',16);
+  g.cyl('y',[x,30*h,z],15*h,30*h,'feuillage',12);
+  g.cyl('y',[x+4*h,52*h,z-3*h],19*h,28*h,'feuillage2',12);
+  g.cyl('y',[x-3*h,76*h,z+2*h],13*h,24*h,'feuillage',12);
+}
+// Cadre avec une œuvre, sur un mur orienté selon x (face vers +x si s=1, vers -x si s=-1)
+function cadreX(g,xw,s,z0,z1,y0,y1,art,bord='noir'){
+  const a=xw, b=xw+s*3, lo=Math.min(a,b), hi=Math.max(a,b);
+  g.box(lo,hi,y0,y1,z0,z1,bord);
+  const c0=xw+s*3, c1=xw+s*3.3; g.box(Math.min(c0,c1),Math.max(c0,c1),y0+3,y1-3,z0+3,z1-3,art);
+}
+
+// Bureau : sol stratifié, peinture « agrandissante », déco
+function decoBureau(g,Hc){
+  const h=Hc;
+  g.box(677,975.75,0,0.8,650,918.75,'parquet');                                     // stratifié chêne clair
+  // Peinture : vert sauge très pâle sur trois murs, bleu brume encore plus clair sur le mur face à la porte
+  g.box(677,687,0,h,650,650.3,'peintureBureau'); g.box(770,975.75,0,h,650,650.3,'peintureBureau');
+  if (h>204) g.box(687,770,204,h,650,650.3,'peintureBureau');
+  g.box(677.4,677.7,0,h,650,918.75,'blocsSauge');
+  g.box(975.45,975.75,0,h,650,918.75,'peintureBureau');
+  g.box(677,975.75,0,h,918.45,918.75,'peintureFond');
+  g.box(677.7,975.45,0,10,918.1,918.45,'blanc');                                     // plinthes blanches
+  g.box(975.1,975.45,0,10,650.3,918.45,'blanc'); g.box(677.7,678.05,0,10,650.3,918.45,'blanc');
+  // tapis entre le fauteuil et la télé
+  g.box(745,875,0.8,1.6,760,900,'tapis');
+  // plante à côté du meuble TV
+  plante(g,697,743,0.8);
+  // cadres au-dessus du fauteuil et au-dessus du bureau
+  cadreX(g,975.45,-1,845,889,118,178,'artA','chene');
+  cadreX(g,975.45,-1,728,778,122,166,'artB','chene');
+  // étagère murale avec livres au-dessus du bureau
+  g.box(830,960,140,142.5,650.3,672,'chene');
+  const couleurs=['livre1','livre2','livre3','livre4','livre1','livre3','livre2'];
+  let bx=836; couleurs.forEach((c,i)=>{ const w=3+(i%3), hb=18+(i*7)%7; g.box(bx,bx+w,142.5,142.5+hb,653,669,c); bx+=w+0.5; });
+  g.cyl('y',[945,142.5,661],6,10,'potTerre',12); g.cyl('y',[945,152.5,661],8,10,'feuillage',10);
+  // lampe de bureau
+  g.cyl('y',[962,74,690],7,2,'noir',14); g.box(961,963,76,112,689,691,'noir');
+  g.box(948,963,110,112,689,691,'noir'); g.cyl('y',[950,100,690],8,10,'noir',14);
+}
+
+// Salle de sport : fresque, plantes, horloge, étagère à serviettes
+function decoSport(g){
+  g.box(720,960,120,180,13.25,13.6,'muralSport');                                   // fresque murale (240 × 60 cm)
+  plante(g,768,42,1); plante(g,955,615,0.9);
+  // horloge et étagère à serviettes sur la cloison
+  g.cyl('z',[880,188,638],16,2,'noir',28); g.cyl('z',[880,188,637.6],14.5,0.5,'blanc',28);
+  g.box(879,881,188,200,637,637.5,'noir'); g.box(880,889,187,189,637,637.5,'noir');
+  g.box(800,860,150,152.5,624,640,'chene');
+  for (const [x,m] of [[806,'serviette1'],[820,'serviette2'],[834,'serviette1']]) g.cyl('z',[x,157.5,626],5,13,m,12);
+  g.box(842,856,152.5,164,628,636,'noir');                                           // enceinte
+}
+
+// Atelier d'art dans le garage
+function atelier(g){
+  g.box(180,300,0,0.4,80,230,'bache');                                              // bâche anti-taches
+  // chevalet tourné vers l'ouest (lumière de la baie sur le côté)
+  for (const z of [123,177]) g.slopeXY(z,z+4,250,0,258,190,4,'bois');               // montants avant
+  g.slopeXY(148,152,305,0,258,182,4,'bois');                                         // pied arrière
+  g.box(240,256,76,80,112,188,'bois');                                               // tablette
+  g.box(244,247,80,160,120,180,'blanc'); g.box(243.7,244,80,160,120,180,'toile');   // toile en cours (60 × 80)
+  g.box(247,256,160,166,147,153,'bois');                                             // serre-toile
+  // tabourets
+  for (const [x,z] of [[205,150],[155,300],[232,430]]){
+    for (const [dx,dz] of [[-10,-10],[10,-10],[-10,10],[10,10]]) g.box(x+dx-1.5,x+dx+1.5,0,64,z+dz-1.5,z+dz+1.5,'bois');
+    g.cyl('y',[x,64,z],17,4,'bois',18);
+  }
+  // table de travail 180 × 90
+  for (const [x,z] of [[112,332],[193,332],[112,503],[193,503]]) g.box(x,x+5,0,88,z,z+5,'bois');
+  g.box(110,200,88,91,330,510,'blanc');
+  const tubes=['peinture1','peinture2','peinture3','peinture4','peinture5'];
+  tubes.forEach((m,i)=>g.box(125+i*6,129+i*6,91,93,350,362,m));
+  g.cyl('y',[180,91,350],5,12,'verre',12);                                           // pot à pinceaux
+  for (const [dx,dz] of [[-2,0],[1,2],[2,-2]]) g.box(180+dx-0.4,180+dx+0.4,96,118,350+dz-0.4,350+dz+0.4,'bois');
+  g.box(130,175,91,91.6,410,450,'palette');                                          // palette
+  g.box(140,190,91,92.5,465,500,'blanc');                                             // carnet de croquis
+  // rangements le long du mur gauche
+  for (const z of [562,736]) for (const x of [2,36]) g.box(x,x+3,0,200,z,z+3,'metal');
+  for (const y of [5,50,95,140,185]) g.box(1,40,y,y+2,560,740,'chene');
+  const boites=['boite1','boite2','boite3','boite1','boite2'];
+  [7,52,97,142].forEach((y,i)=>{ for (let k=0;k<3;k++){ const z=568+k*57; g.box(4,36,y,y+26,z,z+48,boites[(i+k)%5]); } });
+  for (let k=0;k<4;k++) g.cyl('z',[20,191+(k%2)*6,570+k*40],3+(k%2),30,'blanc',10);  // rouleaux de papier
+  // panneau perforé au mur côté cave 2
+  g.box(306,309,100,190,250,470,'pegboard');
+  for (const [z,y,m] of [[280,160,'metal'],[310,150,'peinture2'],[340,165,'gris'],[380,140,'peinture4'],[420,160,'metal']]) g.box(302,306,y-12,y,z-3,z+3,m);
+  // tableaux aux murs
+  cadreX(g,0,1,110,200,120,190,'artC');
+  cadreX(g,0,1,225,285,130,180,'artD');
 }
 
 // Surprise : bonhomme en blocs en caleçon à cœurs, avec une pancarte, au milieu du garage (tourné vers la cave / l'arrière du garage)
@@ -946,6 +1061,85 @@ function texDalleSport(){
   x.fillStyle='#151617'; x.fillRect(0,0,256,3); x.fillRect(0,0,3,256);
   return c;
 }
+function flipV(x,h){ x.translate(0,h); x.scale(1,-1); }
+function texParquet(){
+  const c=cv(512,512), x=c.getContext('2d'), R=rng(81), rows=6, rh=512/rows;
+  for (let r=0;r<rows;r++){
+    let px = -(r%3)*170;
+    while (px < 512){
+      const len = 300 + R()*220, t = 0.9+R()*0.12;
+      x.fillStyle=`rgb(${(200*t)|0},${(165*t)|0},${(118*t)|0})`; x.fillRect(px,r*rh,len,rh);
+      for (let k=0;k<10;k++){ x.strokeStyle=`rgba(120,85,50,${(0.05+R()*0.08).toFixed(2)})`; x.lineWidth=1+R()*1.5; const yy=r*rh+R()*rh; x.beginPath(); x.moveTo(px,yy); x.bezierCurveTo(px+len*0.3,yy+R()*6-3,px+len*0.6,yy+R()*6-3,px+len,yy+R()*4-2); x.stroke(); }
+      x.fillStyle='rgba(90,60,35,.45)'; x.fillRect(px,r*rh,2,rh);
+      px += len;
+    }
+    x.fillStyle='rgba(90,60,35,.45)'; x.fillRect(0,r*rh,512,2);
+  }
+  return c;
+}
+function texTapis(){
+  const c=cv(256,256), x=c.getContext('2d');
+  x.fillStyle='#e9e2d4'; x.fillRect(0,0,256,256);
+  x.strokeStyle='#2f5f6a'; x.lineWidth=10;
+  x.beginPath(); x.moveTo(128,8); x.lineTo(248,128); x.lineTo(128,248); x.lineTo(8,128); x.closePath(); x.stroke();
+  x.strokeStyle='#c96f4a'; x.lineWidth=6; x.beginPath(); x.moveTo(128,60); x.lineTo(196,128); x.lineTo(128,196); x.lineTo(60,128); x.closePath(); x.stroke();
+  x.fillStyle='#2f5f6a'; x.fillRect(118,118,20,20);
+  return c;
+}
+function texArt(seed,fond,cols){
+  const c=cv(256,256), x=c.getContext('2d'), R=rng(seed);
+  x.fillStyle=fond; x.fillRect(0,0,256,256);
+  for (let i=0;i<7;i++){
+    x.fillStyle=cols[i%cols.length]; x.globalAlpha=0.75+R()*0.25;
+    if (R()<0.5){ x.beginPath(); x.arc(R()*256,R()*256,20+R()*60,0,7); x.fill(); }
+    else x.fillRect(R()*200,R()*200,30+R()*120,10+R()*60);
+  }
+  x.globalAlpha=1; x.strokeStyle=cols[0]; x.lineWidth=5; x.beginPath(); x.moveTo(R()*256,0); x.bezierCurveTo(R()*256,90,R()*256,170,R()*256,256); x.stroke();
+  return c;
+}
+function texToile(){
+  const c=cv(256,512), x=c.getContext('2d'), R=rng(91);
+  flipV(x,512);
+  const gr=x.createLinearGradient(0,0,0,512); gr.addColorStop(0,'#f3c46b'); gr.addColorStop(0.55,'#e9785a'); gr.addColorStop(1,'#3d5a80');
+  x.fillStyle=gr; x.fillRect(0,0,256,512);
+  x.fillStyle='#fff3d6'; x.beginPath(); x.arc(170,170,48,0,7); x.fill();
+  x.fillStyle='#2b3d5a'; x.beginPath(); x.moveTo(0,380); x.lineTo(90,300); x.lineTo(160,350); x.lineTo(256,280); x.lineTo(256,512); x.lineTo(0,512); x.fill();
+  for (let i=0;i<40;i++){ x.fillStyle=`rgba(255,255,255,${(R()*0.25).toFixed(2)})`; x.fillRect(R()*256,R()*512,10+R()*30,3); }
+  return c;
+}
+function texMuralSport(){
+  const c=cv(1024,256), x=c.getContext('2d');
+  flipV(x,256);
+  x.fillStyle='#1f6f6b'; x.fillRect(0,0,1024,256);
+  x.fillStyle='#e9785a'; x.fillRect(0,206,1024,14);
+  x.fillStyle='#ffffff'; x.textAlign='center'; x.textBaseline='middle';
+  let fs=150; const t='ON LÂCHE RIEN';
+  do { x.font=`bold ${fs}px "IBM Plex Sans Condensed","Arial Narrow",Impact,sans-serif`; fs-=6; } while (x.measureText(t).width > 920 && fs > 40);
+  x.fillText(t,512,112);
+  return c;
+}
+function texPegboard(){
+  const c=cv(256,256), x=c.getContext('2d');
+  x.fillStyle='#d6c19c'; x.fillRect(0,0,256,256);
+  x.fillStyle='#6b5a44'; for (let i=8;i<256;i+=16) for (let j=8;j<256;j+=16){ x.beginPath(); x.arc(i,j,2.6,0,7); x.fill(); }
+  return c;
+}
+function texBache(){
+  const c=cv(512,512), x=c.getContext('2d'), R=rng(97);
+  x.fillStyle='#e6dfcf'; x.fillRect(0,0,512,512);
+  const cols=['#d9433a','#3a74c9','#f0c23c','#3fa35b','#8e4cb5'];
+  for (let i=0;i<160;i++){ x.fillStyle=cols[i%5]; x.globalAlpha=0.5+R()*0.4; x.beginPath(); x.arc(R()*512,R()*512,1+R()*6,0,7); x.fill(); }
+  return c;
+}
+function texBlocsTeinte(fond){
+  const c=cv(512,256), x=c.getContext('2d'), R=rng(52);
+  x.fillStyle=fond; x.fillRect(0,0,512,256);
+  for (let i=0;i<14000;i++){ const v=R()<.5?0:255; x.fillStyle=`rgba(${v},${v},${v},.06)`; x.fillRect(R()*512,R()*256,1.6,1.6); }
+  x.fillStyle='rgba(120,130,125,.25)';
+  x.fillRect(0,0,512,3); x.fillRect(0,128,512,3);
+  for (const [y,off] of [[0,0],[128,128]]) for (let k=0;k<3;k++){ const px=(k*256+off)%512; x.fillRect(px,y,3,128); }
+  return c;
+}
 function texDalleMin(){
   const c=cv(512,512), x=c.getContext('2d'), R=rng(41);
   x.fillStyle='#ecebe6'; x.fillRect(0,0,512,512);
@@ -1000,7 +1194,11 @@ const A = { p:gl.getAttribLocation(prog,'aP'), n:gl.getAttribLocation(prog,'aN')
 const U = { vp:gl.getUniformLocation(prog,'uVP'), c:gl.getUniformLocation(prog,'uC'), tex:gl.getUniformLocation(prog,'uTex'), emit:gl.getUniformLocation(prog,'uEmit'), a:gl.getUniformLocation(prog,'uA'), k:gl.getUniformLocation(prog,'uK'), t:gl.getUniformLocation(prog,'uT') };
 const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
 const TEX = {};
-for (const [k,f] of Object.entries({ blocs:texBlocs, beton:texBeton, plafond:texPlafond, ply:()=>texBois('#d8b787',3,3), pin:()=>texBois('#dcbb85',5,2), pg:texPorteGarage, carreaux:texCarreaux, gyproc:texGyproc, dalleMin:texDalleMin, blocsPeints:texBlocsPeints, sac:texSac, calecon:texCalecon, pancarte:texPancarte, dalleSport:texDalleSport })){
+for (const [k,f] of Object.entries({ blocs:texBlocs, beton:texBeton, plafond:texPlafond, ply:()=>texBois('#d8b787',3,3), pin:()=>texBois('#dcbb85',5,2), pg:texPorteGarage, carreaux:texCarreaux, gyproc:texGyproc, dalleMin:texDalleMin, blocsPeints:texBlocsPeints, sac:texSac, calecon:texCalecon, pancarte:texPancarte, dalleSport:texDalleSport,
+  parquet:texParquet, tapis:texTapis, toile:texToile, muralSport:texMuralSport, pegboard:texPegboard, bache:texBache,
+  blocsSauge:()=>texBlocsTeinte('#d9e8de'),
+  artA:()=>texArt(3,'#f2ede2',['#2f5f6a','#c96f4a','#e3b04b']), artB:()=>texArt(5,'#1f3b4d',['#e9785a','#f3c46b','#9cc5c0']),
+  artC:()=>texArt(7,'#faf6ee',['#d9433a','#3a74c9','#f0c23c','#222']), artD:()=>texArt(11,'#2b2b2b',['#f0c23c','#e9e2d4','#3fa35b']) })){
   const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,f());
   gl.generateMipmap(gl.TEXTURE_2D);
