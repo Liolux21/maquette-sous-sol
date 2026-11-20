@@ -166,7 +166,7 @@ const MODEL = {
     { id:'garage', nom:'Garage', surface:'24 m²', x0:0,   x1:309, z0:0, z1:772, etiquette:[154,250] },
     { id:'local',  nom:'Local technique', surface:'4,6 m²', x0:0, x1:309, z0:782, z1:932, etiquette:[230,850] },
     { id:'cave2',  nom:'Cave 2', surface:'28 m²', x0:329, x1:657, z0:0, z1:932, etiquette:[493,560] },
-    { id:'cave1',  nom:'Cave 1', surface:'18,7 m²', x0:677, x1:989, z0:0, z1:640, etiquette:[833,420] },
+    { id:'cave1',  nom:'Salle de sport', surface:'18,7 m²', x0:677, x1:989, z0:0, z1:640, etiquette:[833,560] },
     { id:'cave1b', nom:'Bureau', surface:'8 m²', x0:677, x1:989, z0:650, z1:932, etiquette:[760,890] },
   ],
   // Murs : rectangles au sol. Ouvertures repérées le long du mur (from/to), h = hauteur de passage.
@@ -266,6 +266,9 @@ const MATS = {
   chene:   { color:[0.74,0.62,0.47] },
   cognac:  { color:[0.56,0.31,0.17] },
   ecran:   { color:[0.06,0.08,0.11] },
+  dalleSport:{ tex:'dalleSport', tile:[100,100] },
+  tapisYoga:{ color:[0.18,0.52,0.55] },
+  miroir:  { color:[0.80,0.86,0.90], k:1.15 },
   peau:    { color:[0.97,0.80,0.62] },
   cheveux: { color:[0.36,0.22,0.12] },
   joues:   { color:[0.95,0.55,0.60] },
@@ -317,6 +320,11 @@ const ITEM_LABELS = [
   { t:'Adoucisseur', p:[428,60,218], gauche:true },
   { t:'Pompe à eau', p:[16,170,490] },
   { t:'Cuve à mazout 1200 L', p:[95,178,880], si:'cuve' },
+  { t:'Tapis de course', p:[925,140,130] },
+  { t:'Rameur', p:[718,70,150] },
+  { t:'Banc de musculation', p:[815,52,390] },
+  { t:'Haltères', p:[700,90,366] },
+  { t:'Miroir', p:[973,190,400], gauche:true },
   { t:'Bureau d\'angle', p:[845,80,760] },
   { t:'Fauteuil', p:[934,96,877] },
   { t:'Télévision 55"', p:[686,176,836] },
@@ -539,6 +547,7 @@ function buildScene(opts){
   rangementCave2(g);
   if (MODEL.surprise) bonhomme(g);
   bureau(g);
+  salleDeSport(g);
 
   if (opts.chaufferie === 'cuve'){
     // cuve à mazout 1200 L, acier ovale debout, d'après la photo :
@@ -628,6 +637,43 @@ function bureau(g){
   g.box(mx0,mx1,8,55,mz0,mz1,'chene');
   for (let i=1;i<3;i++) g.box(mx1,mx1+0.3,11,52,mz0+i*160/3-0.4,mz0+i*160/3+0.4,'sombre');   // séparation des portes
   for (let i=0;i<3;i++){ const zc=mz0+(i+0.5)*160/3; g.box(mx1,mx1+2,45,47,zc-8,zc+8,'noir'); }  // poignées
+}
+
+// Salle de sport dans la partie nord de la cave 1 (x 677 → 975,75 ; z 13,25 → 640). Passage vers la cave 2 et porte du bureau laissés libres.
+function salleDeSport(g){
+  g.box(677,975.75,0,1,13.25,640,'dalleSport');                                     // sol caoutchouc 100 × 100
+  // tapis de course le long du mur de droite, face au mur du fond (≈ 180 × 80 cm)
+  g.box(887,963,1,26,40,75,'noir');                                                 // capot moteur
+  g.box(887,963,1,17,75,220,'noir'); g.box(895,955,17,18.5,78,216,'sombre');        // plateau et bande
+  g.box(887,895,17,20,75,220,'gris'); g.box(955,963,17,20,75,220,'gris');           // bords
+  for (const x of [888,957]) g.box(x,x+5,26,122,48,54,'gris');                      // montants
+  g.box(885,965,118,134,40,62,'noir'); g.box(905,945,122,132,61.8,62.2,'ecran');    // console
+  for (const x of [885,960]) g.box(x,x+5,104,109,50,112,'gris');                    // poignées
+  // rameur le long du mur côté cave 2, au fond
+  g.cyl('x',[700,36,52],24,34,'noir',24);                                           // carter du volant d'inertie
+  g.box(711,724,10,18,60,250,'gris');                                               // rail
+  g.box(704,731,0,10,240,252,'gris'); g.box(704,731,0,12,58,72,'gris');             // pieds
+  g.box(706,729,18,25,150,182,'sombre');                                            // siège
+  g.box(701,734,12,22,82,100,'noir');                                               // cale-pieds
+  g.box(716,719,36,92,46,50,'gris'); g.box(707,728,88,104,44,47,'ecran');           // moniteur
+  // banc de musculation au milieu
+  for (const z of [342,436]) g.box(803,827,0,36,z,z+6,'noir');
+  g.box(811,819,30,36,342,442,'noir');
+  g.box(800,830,36,45,330,452,'sombre');                                            // assise et dossier
+  // rack d'haltères contre le mur côté cave 2 (entre le rameur et le passage)
+  for (const z of [292,436]) g.box(681,686,0,78,z,z+4,'noir'); for (const z of [292,436]) g.box(716,721,0,62,z,z+4,'noir');
+  g.box(681,721,34,37,292,440,'noir'); g.box(681,721,66,69,292,440,'noir');
+  for (let i=0;i<5;i++){ const z=304+i*28; for (const y of [45,77]){
+    const r = 5+i*0.9 + (y>60?0:1.5);
+    g.cyl('x',[684,y,z],1.5,34,'metal',8);
+    g.cyl('x',[684,y,z],r,6,'noir',16); g.cyl('x',[712,y,z],r,6,'noir',16);
+  }}
+  for (const [x,z,r] of [[740,452,8],[760,452,9.5],[782,452,11]]){                 // kettlebells
+    g.cyl('y',[x,1,z],r,r*1.6,'noir',16); g.box(x-r*0.6,x+r*0.6,r*1.6+1,r*1.6+4,z-1.5,z+1.5,'noir');
+  }
+  // tapis de sol et miroir mural
+  g.box(860,920,1,1.6,290,470,'tapisYoga');
+  g.box(973.75,975.6,25,205,275,525,'noir'); g.box(973.4,973.75,28,202,278,522,'miroir');
 }
 
 // Surprise : bonhomme en blocs en caleçon à cœurs, avec une pancarte, au milieu du garage (tourné vers la cave / l'arrière du garage)
@@ -893,6 +939,13 @@ function texPancarte(){
   x.strokeStyle='#d42a3a'; x.lineWidth=8; x.strokeRect(14,14,484,228);
   return c;
 }
+function texDalleSport(){
+  const c=cv(256,256), x=c.getContext('2d'), R=rng(71);
+  x.fillStyle='#2a2c2e'; x.fillRect(0,0,256,256);
+  for (let i=0;i<9000;i++){ const v=R()<.5?20:80; x.fillStyle=`rgba(${v},${v},${v+4},.45)`; x.fillRect(R()*256,R()*256,1.5,1.5); }
+  x.fillStyle='#151617'; x.fillRect(0,0,256,3); x.fillRect(0,0,3,256);
+  return c;
+}
 function texDalleMin(){
   const c=cv(512,512), x=c.getContext('2d'), R=rng(41);
   x.fillStyle='#ecebe6'; x.fillRect(0,0,512,512);
@@ -947,7 +1000,7 @@ const A = { p:gl.getAttribLocation(prog,'aP'), n:gl.getAttribLocation(prog,'aN')
 const U = { vp:gl.getUniformLocation(prog,'uVP'), c:gl.getUniformLocation(prog,'uC'), tex:gl.getUniformLocation(prog,'uTex'), emit:gl.getUniformLocation(prog,'uEmit'), a:gl.getUniformLocation(prog,'uA'), k:gl.getUniformLocation(prog,'uK'), t:gl.getUniformLocation(prog,'uT') };
 const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
 const TEX = {};
-for (const [k,f] of Object.entries({ blocs:texBlocs, beton:texBeton, plafond:texPlafond, ply:()=>texBois('#d8b787',3,3), pin:()=>texBois('#dcbb85',5,2), pg:texPorteGarage, carreaux:texCarreaux, gyproc:texGyproc, dalleMin:texDalleMin, blocsPeints:texBlocsPeints, sac:texSac, calecon:texCalecon, pancarte:texPancarte })){
+for (const [k,f] of Object.entries({ blocs:texBlocs, beton:texBeton, plafond:texPlafond, ply:()=>texBois('#d8b787',3,3), pin:()=>texBois('#dcbb85',5,2), pg:texPorteGarage, carreaux:texCarreaux, gyproc:texGyproc, dalleMin:texDalleMin, blocsPeints:texBlocsPeints, sac:texSac, calecon:texCalecon, pancarte:texPancarte, dalleSport:texDalleSport })){
   const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,f());
   gl.generateMipmap(gl.TEXTURE_2D);
