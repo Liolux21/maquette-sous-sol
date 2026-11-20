@@ -320,6 +320,7 @@ const ITEM_LABELS = [
   { t:'Bureau d\'angle', p:[945,80,700] },
   { t:'Fauteuil', p:[903,96,836] },
   { t:'Télévision 55"', p:[686,176,836] },
+  { t:'Meuble TV', p:[718,58,880] },
   { t:'Coffre de toit sur support bois', p:[379,236,815] },
   { t:'Palettes de pellets', p:[381,72,760] },
   { t:'Ballon Vitocell 100-V 300 L', p:[37,182,896], si:'pac' },
@@ -620,6 +621,12 @@ function bureau(g){
   g.box(677.4,681,118,152,tz-20,tz+20,'noir');                       // support mural
   g.box(681,685,100,171,tz-61.5,tz+61.5,'noir');
   g.box(685,685.3,102,169,tz-59.5,tz+59.5,'ecran');
+  // meuble sous la télévision : 160 × 40 × 55 cm, chêne, 3 portes, sur pieds noirs
+  const mz0=tz-80, mz1=tz+80, mx0=677.4, mx1=717.4;
+  for (const [x,z] of [[mx0+3,mz0+3],[mx0+3,mz1-7],[mx1-7,mz0+3],[mx1-7,mz1-7]]) g.box(x,x+4,0,8,z,z+4,'noir');
+  g.box(mx0,mx1,8,55,mz0,mz1,'chene');
+  for (let i=1;i<3;i++) g.box(mx1,mx1+0.3,11,52,mz0+i*160/3-0.4,mz0+i*160/3+0.4,'sombre');   // séparation des portes
+  for (let i=0;i<3;i++){ const zc=mz0+(i+0.5)*160/3; g.box(mx1,mx1+2,45,47,zc-8,zc+8,'noir'); }  // poignées
 }
 
 // Surprise : bonhomme en blocs en caleçon à cœurs, avec une pancarte, au milieu du garage (tourné vers la cave / l'arrière du garage)
