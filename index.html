@@ -166,7 +166,8 @@ const MODEL = {
     { id:'garage', nom:'Garage', surface:'24 m²', x0:0,   x1:309, z0:0, z1:772, etiquette:[154,250] },
     { id:'local',  nom:'Local technique', surface:'4,6 m²', x0:0, x1:309, z0:782, z1:932, etiquette:[230,850] },
     { id:'cave2',  nom:'Cave 2', surface:'28 m²', x0:329, x1:657, z0:0, z1:932, etiquette:[493,560] },
-    { id:'cave1',  nom:'Cave 1', surface:'27 m² après doublage', x0:677, x1:989, z0:0, z1:932, etiquette:[833,466] },
+    { id:'cave1',  nom:'Cave 1', surface:'18,7 m²', x0:677, x1:989, z0:0, z1:640, etiquette:[833,420] },
+    { id:'cave1b', nom:'Pièce cave 1', surface:'8 m²', x0:677, x1:989, z0:650, z1:932, etiquette:[860,790] },
   ],
   // Murs : rectangles au sol. Ouvertures repérées le long du mur (from/to), h = hauteur de passage.
   // porte : 'baie' (baie vitrée coulissante), 'porte' (porte pleine), 'panneau' (contreplaqué), absent = passage libre
@@ -181,6 +182,9 @@ const MODEL = {
     // cloison du local technique : plaques de plâtre sur ossature (10 cm), depuis le mur gauche,
     // assez longue pour masquer la cuve (qui va jusqu'à 1,75 m) ; passage libre de 1,24 m côté cave 2
     { id:'local-technique', x0:0, x1:185, z0:772, z1:782, mat:'murBlanc' },
+    // cloison dans la cave 1, juste à droite du passage en entrant : plaques de plâtre peintes (10 cm), porte de 83 cm
+    { id:'cloison-cave1', x0:677, x1:975.75, z0:640, z1:650, mat:'murBlanc',
+      openings:[ {from:687, to:770, h:204, porte:'porte'} ] },
     { id:'cave2-cave1',  x0:657, x1:677, z0:0, z1:932, openings:[ {from:560, to:640, h:204} ] },
     { id:'escalier-g', x0:449, x1:459, z0:0, z1:222 },
     { id:'escalier-d-bas', x0:539, x1:549, z0:0, z1:88, h:106 },   // sous le palier
@@ -320,7 +324,7 @@ const DIMS = [
   ['x', 1000, 0, 309, '309'], ['x', 1000, 329, 657, '328'], ['x', 1000, 677, 989, '312'],
   ['x', -70, 0, 309, '309'], ['x', -70, 329, 449, '120'], ['x', -70, 549, 657, '110'], ['x', -70, 677, 989, '312'],
   ['z', -75, 0, 932, '933'], ['z', 1065, 0, 932, '932'],
-  ['x', 860, 677, 975.75, '299'], ['z', 945, 13.25, 918.75, '906'],   // cave 1 après doublage
+  ['x', 860, 677, 975.75, '299'], ['z', 945, 13.25, 640, '627'], ['z', 945, 650, 918.75, '269'],   // cave 1 après doublage
 ];
 
 class Geo {
