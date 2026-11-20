@@ -62,13 +62,25 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .pad button:active{background:var(--ink);color:#fff}
 .pad .up{grid-column:2;grid-row:1}.pad .left{grid-column:1;grid-row:2}.pad .down{grid-column:2;grid-row:2}.pad .right{grid-column:3;grid-row:2}
 .rooms-vis{display:none}
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.collapse{appearance:none;flex:none;width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);background:#fff;border-radius:8px;color:var(--ink);cursor:pointer}
+.collapse:hover{border-color:var(--ink)}
+.collapse svg{transition:transform .2s ease}
+.panel-body{display:flex;flex-direction:column;gap:14px}
+.panel.collapsed{width:auto;padding:10px 10px 10px 14px}
+.panel.collapsed .panel-body,.panel.collapsed .sub{display:none}
+.panel.collapsed .head{align-items:center}
+.panel.collapsed h1{font-size:17px}
+.panel.collapsed .collapse svg{transform:rotate(180deg)}
 .legend ul{list-style:none;margin:0;padding:0;display:grid;gap:5px}
 .legend li{display:flex;align-items:center;gap:8px;font-size:12.5px}
 .legend span{width:18px;height:7px;border-radius:2px;flex:none}
 .legend[hidden]{display:none}
 
 @media (max-width:640px){
-  .panel{top:10px;left:10px;right:10px;width:auto;padding:12px;gap:10px;max-height:46%}
+  .panel{top:10px;left:10px;right:10px;width:auto;padding:12px;gap:10px;max-height:62%}
+  .panel-body{gap:10px}
+  .panel.collapsed{right:auto}
   .panel h1{font-size:19px}
   .hint{bottom:10px;font-size:11.5px}
   .pad{right:12px;bottom:46px}
@@ -82,10 +94,17 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   <canvas id="ov" aria-hidden="true"></canvas>
 
   <div class="panel" id="panel">
-    <div>
-      <h1>Sous-sol · maquette 3D</h1>
-      <p class="sub">Garage, cave 2 et cave 1, environ 86 m²</p>
+    <div class="head">
+      <div>
+        <h1>Sous-sol · maquette 3D</h1>
+        <p class="sub">Garage, cave 2 et cave 1, environ 86 m²</p>
+      </div>
+      <button type="button" class="collapse" id="toggle-panel" aria-expanded="true" aria-controls="panel-body" aria-label="Réduire le menu" title="Réduire le menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
     </div>
+
+    <div class="panel-body" id="panel-body">
 
     <div>
       <p class="label">Vue</p>
@@ -140,6 +159,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     <button type="button" class="tool" id="measure" aria-pressed="false" hidden>Mesurer une distance</button>
 
     <p class="note">Cotes reprises du plan. <b>Hauteur sous plafond : 2,40 m</b> (12 rangs de parpaings). Les portes et les ouvertures sont placées d'après le plan et les photos.<br><br><b>Doublage cave 1</b> (du mur vers la pièce) : lame d'air 2 cm, ossature métal 10 cm avec PIR/PUR 6 cm, plaque hydro 12,5 mm. Murs peints en blanc. Décochez « Plaques hydro » pour voir l'ossature.<br><br><b>Faux plafond cave 1</b> : ossature T24, dalles 60×60, sous-face à 2,20 m (plénum de 20 cm pour la gaine de VMC).</p>
+    </div>
   </div>
 
   <div class="hint" id="hint"></div>
@@ -1315,7 +1335,9 @@ function drawOverlay(){
     }
     // équipements
     c.font=`500 11.5px ${CSSV('--font-body')}`; c.textAlign='left'; c.textBaseline='middle';
+    const petitEcran = S.W <= 640 && S.mode !== 'visite';     // sur téléphone : étiquettes d'équipements seulement en visite
     for (const it of ITEM_LABELS){
+      if (petitEcran) break;
       if (it.si && it.si !== S.opts.chaufferie) continue;
       if (ici && roomOf(it.p[0],it.p[2])!==ici) continue;
       const enPlan = S.mode==='plan';
@@ -1357,9 +1379,10 @@ function resize(){
 window.addEventListener('resize',resize);
 
 /* ---------------- Vues ---------------- */
-function panelOffset(){ return S.W > 900 ? 160 : 0; }
+const panelEl = document.getElementById('panel'), panelReduit = () => panelEl.classList.contains('collapsed');
+function panelOffset(){ return (S.W > 900 && !panelReduit()) ? 160 : 0; }
 function fitPlan(){
-  const narrow = S.W <= 640, top = narrow ? S.H*0.42 : 0;
+  const narrow = S.W <= 640, top = narrow ? panelEl.getBoundingClientRect().bottom + 8 : 0;
   const avW = S.W - (S.W>900?320:40), avH = S.H - top - 60;
   S.plan.scale = Math.min(avW/1260, avH/1220);
   S.plan.x = 495 - panelOffset()/S.plan.scale;
@@ -1367,9 +1390,9 @@ function fitPlan(){
 }
 function fitOrbit(room){
   const o=S.orbit, a=S.W/S.H;
-  if (!room || room==='all'){ o.t=[495,40,466]; o.dist = 1700*Math.max(1,1.35/a); o.yaw=-0.42; o.pitch=0.86; }
+  if (!room || room==='all'){ o.t=[495,40,466]; o.dist = 1700*Math.max(1, (a<0.8 ? 1.15 : 1.35)/a); o.yaw=-0.42; o.pitch=0.86; }
   else { const r=MODEL.rooms.find(x=>x.id===room); o.t=[(r.x0+r.x1)/2,40,(r.z0+r.z1)/2]; o.dist=1250*Math.max(1,1.1/a); }
-  if (S.W>900){ // décale la maquette à droite du panneau
+  if (S.W>900 && !panelReduit()){ // décale la maquette à droite du panneau
     const sh = 150/S.W*o.dist*0.75; o.t=[o.t[0]-Math.cos(o.yaw)*sh,o.t[1],o.t[2]+Math.sin(o.yaw)*sh];
   }
 }
@@ -1388,8 +1411,13 @@ function setMode(m){
   }
   rebuild(); hint(); dirty=true;
 }
+const tactile = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
 function hint(){
-  const t = {
+  const t = tactile ? {
+    orbit:'Un doigt : tourner · Deux doigts : zoomer et déplacer',
+    plan:'Un doigt : déplacer · Deux doigts : zoomer',
+    visite:'Glisser : regarder autour · Flèches : marcher',
+  }[S.mode] : {
     orbit:'Glisser : tourner · Clic droit ou Maj + glisser : déplacer · Molette ou pincer : zoomer',
     plan:'Glisser : déplacer · Molette ou pincer : zoomer',
     visite:'Glisser : regarder autour · Flèches, ZQSD ou boutons : marcher',
@@ -1538,6 +1566,18 @@ function frame(t){
 }
 
 /* ---------------- Démarrage ---------------- */
+// menu repliable (replié d'office sur téléphone)
+const toggleBtn = document.getElementById('toggle-panel');
+function setPanelReduit(c){
+  panelEl.classList.toggle('collapsed', c);
+  toggleBtn.setAttribute('aria-expanded', String(!c));
+  const t = c ? 'Afficher le menu' : 'Réduire le menu'; toggleBtn.setAttribute('aria-label', t); toggleBtn.title = t;
+  if (S.mode==='plan') fitPlan();
+  dirty = true;
+}
+toggleBtn.addEventListener('click', () => setPanelReduit(!panelReduit()));
+if (window.matchMedia && window.matchMedia('(max-width:640px)').matches) setPanelReduit(true);
+
 resize(); fitOrbit('all'); fitPlan(); rebuild(); hint();
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ dirty=true; });
 requestAnimationFrame(frame);
