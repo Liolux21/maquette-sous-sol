@@ -167,7 +167,7 @@ const MODEL = {
     { id:'local',  nom:'Local technique', surface:'4,6 m²', x0:0, x1:309, z0:782, z1:932, etiquette:[230,850] },
     { id:'cave2',  nom:'Cave 2', surface:'28 m²', x0:329, x1:657, z0:0, z1:932, etiquette:[493,560] },
     { id:'cave1',  nom:'Cave 1', surface:'18,7 m²', x0:677, x1:989, z0:0, z1:640, etiquette:[833,420] },
-    { id:'cave1b', nom:'Pièce cave 1', surface:'8 m²', x0:677, x1:989, z0:650, z1:932, etiquette:[860,790] },
+    { id:'cave1b', nom:'Bureau', surface:'8 m²', x0:677, x1:989, z0:650, z1:932, etiquette:[760,890] },
   ],
   // Murs : rectangles au sol. Ouvertures repérées le long du mur (from/to), h = hauteur de passage.
   // porte : 'baie' (baie vitrée coulissante), 'porte' (porte pleine), 'panneau' (contreplaqué), absent = passage libre
@@ -263,6 +263,9 @@ const MATS = {
   cuve:    { color:[0.24,0.45,0.70] },
   blancNacre:{ color:[0.95,0.95,0.93], k:1.05 },
   noir:    { color:[0.11,0.11,0.12] },
+  chene:   { color:[0.74,0.62,0.47] },
+  cognac:  { color:[0.56,0.31,0.17] },
+  ecran:   { color:[0.06,0.08,0.11] },
   peau:    { color:[0.97,0.80,0.62] },
   cheveux: { color:[0.36,0.22,0.12] },
   joues:   { color:[0.95,0.55,0.60] },
@@ -314,6 +317,9 @@ const ITEM_LABELS = [
   { t:'Adoucisseur', p:[428,60,218], gauche:true },
   { t:'Pompe à eau', p:[16,170,490] },
   { t:'Cuve à mazout 1200 L', p:[95,178,880], si:'cuve' },
+  { t:'Bureau d\'angle', p:[945,80,700] },
+  { t:'Fauteuil', p:[903,96,836] },
+  { t:'Télévision 55"', p:[686,176,836] },
   { t:'Coffre de toit sur support bois', p:[379,236,815] },
   { t:'Palettes de pellets', p:[381,72,760] },
   { t:'Ballon Vitocell 100-V 300 L', p:[37,182,896], si:'pac' },
@@ -531,6 +537,7 @@ function buildScene(opts){
   }
   rangementCave2(g);
   if (MODEL.surprise) bonhomme(g);
+  bureau(g);
 
   if (opts.chaufferie === 'cuve'){
     // cuve à mazout 1200 L, acier ovale debout, d'après la photo :
@@ -578,6 +585,41 @@ function rangementCave2(g){
       g.box(x0+i*40+1+jx,x0+i*40+39+jx,y,y+11,z0+j*60+1+jz,z0+j*60+59+jz,'sac');
     }
   }
+}
+
+// Bureau dans la nouvelle pièce de la cave 1 (x 677 → 975,75, z 650 → 918,75 ; porte en haut à gauche)
+function bureau(g){
+  // bureau d'angle 160 × 140 cm, prof. 60, plateau chêne, piétement métal noir — angle cloison / mur de droite
+  const yT = 74;
+  g.box(815,975.75,yT-2.5,yT,650,710,'chene');                      // retour le long de la cloison
+  g.box(915.75,975.75,yT-2.5,yT,710,790,'chene');                   // retour le long du mur de droite
+  for (const [x,z] of [[817,652],[817,703],[969,652],[918,783],[969,783]]) g.box(x,x+5,0,yT-2.5,z,z+5,'noir');
+  g.box(817,969,yT-10,yT-2.5,652,655,'noir');                       // ceinture arrière
+  // écran, clavier, souris
+  g.box(882,898,yT,yT+1,664,676,'noir'); g.box(888,892,yT+1,yT+14,668,672,'noir');
+  g.box(860,920,yT+12,yT+46,664,667,'noir'); g.box(862,918,yT+14,yT+44,667,667.4,'ecran');
+  g.box(868,912,yT,yT+1.5,686,700,'gris'); g.box(922,928,yT,yT+2,688,698,'gris');
+  // fauteuil de bureau, tourné vers l'écran
+  const cx=890, cz=752;
+  g.box(cx-28,cx+28,3,7,cz-2,cz+2,'noir'); g.box(cx-2,cx+2,3,7,cz-28,cz+28,'noir');   // piétement en croix
+  for (const [dx,dz] of [[-27,0],[27,0],[0,-27],[0,27]]) g.cyl('y',[cx+dx,0,cz+dz],2.5,3,'gris',8);
+  g.cyl('y',[cx,7,cz],3,37,'metal',10);
+  g.box(cx-25,cx+25,44,52,cz-24,cz+24,'sombre');                    // assise
+  g.box(cx-22,cx+22,56,108,cz+22,cz+28,'sombre');                   // dossier
+  g.box(cx-2,cx+2,48,58,cz+20,cz+26,'noir');
+  for (const dx of [-27,23]) g.box(cx+dx,cx+dx+4,52,66,cz-14,cz+12,'noir');          // accoudoirs
+  // fauteuil de salon cuir cognac, tourné vers la télévision
+  const fx0=862, fx1=945, fz0=795, fz1=878;
+  for (const [x,z] of [[fx0+4,fz0+4],[fx0+4,fz1-8],[fx1-8,fz0+4],[fx1-8,fz1-8]]) g.box(x,x+4,0,10,z,z+4,'bois');
+  g.box(fx0,fx1,10,40,fz0,fz1,'cognac');                             // caisse
+  g.box(fx0+2,fx1-20,40,49,fz0+15,fz1-15,'cognac');                 // coussin d'assise
+  g.box(fx1-20,fx1,40,92,fz0,fz1,'cognac');                         // dossier
+  g.box(fx0,fx1-20,40,64,fz0,fz0+15,'cognac'); g.box(fx0,fx1-20,40,64,fz1-15,fz1,'cognac');   // accoudoirs
+  // télévision 55" fixée au mur côté cave 2, face au fauteuil
+  const tz=(fz0+fz1)/2;
+  g.box(677.4,681,118,152,tz-20,tz+20,'noir');                       // support mural
+  g.box(681,685,100,171,tz-61.5,tz+61.5,'noir');
+  g.box(685,685.3,102,169,tz-59.5,tz+59.5,'ecran');
 }
 
 // Surprise : bonhomme en blocs en caleçon à cœurs, avec une pancarte, au milieu du garage (tourné vers la cave / l'arrière du garage)
